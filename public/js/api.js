@@ -180,6 +180,21 @@ class ApiClient {
         });
         return res;
     }
+
+    // Password Recovery endpoints
+    async forgotPassword(email) {
+        return await this.request('/auth/forgot-password', {
+            method: 'POST',
+            body: JSON.stringify({ email })
+        });
+    }
+
+    async resetPassword(token, password) {
+        return await this.request('/auth/reset-password', {
+            method: 'POST',
+            body: JSON.stringify({ token, password })
+        });
+    }
 }
 
 const api = new ApiClient();

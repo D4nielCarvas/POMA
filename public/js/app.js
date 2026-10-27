@@ -75,6 +75,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function initApp() {
     bindGlobalEvents();
+
+    // Detecta token de redefinição de senha na URL (vindo do link no e-mail)
+    const urlParams = new URLSearchParams(window.location.search);
+    const resetToken = urlParams.get('token');
+    if (window.location.pathname === '/reset-password' && resetToken) {
+        showResetPasswordView(resetToken);
+        // Limpa a URL sem recarregar a página
+        window.history.replaceState({}, '', '/');
+        return;
+    }
+
     checkAuthSession();
 
     // Redireciona para login automaticamente quando o token JWT expira
@@ -100,7 +111,29 @@ function checkAuthSession() {
 function renderAuthView() {
     document.getElementById('app-navbar').style.display = 'none';
     document.getElementById('dashboard-view').style.display = 'none';
+    document.getElementById('forgot-password-view').style.display = 'none';
+    document.getElementById('reset-password-view').style.display = 'none';
     document.getElementById('auth-view').style.display = 'flex';
+}
+
+function showForgotPasswordView() {
+    document.getElementById('auth-view').style.display = 'none';
+    document.getElementById('reset-password-view').style.display = 'none';
+    document.getElementById('forgot-password-view').style.display = 'flex';
+    // Limpa estado do formulário
+    document.getElementById('forgot-form').reset();
+    document.getElementById('forgot-subtitle').textContent = 'Informe seu e-mail e enviaremos as instruções de recuperação.';
+}
+
+function showResetPasswordView(token) {
+    document.getElementById('auth-view').style.display = 'none';
+    document.getElementById('app-navbar').style.display = 'none';
+    document.getElementById('dashboard-view').style.display = 'none';
+    document.getElementById('forgot-password-view').style.display = 'none';
+    document.getElementById('reset-password-view').style.display = 'flex';
+    // Armazena o token temporariamente para uso no submit
+    document.getElementById('reset-form').dataset.token = token;
+    document.getElementById('reset-form').reset();
 }
 
 function renderAuthenticatedUI() {
@@ -1171,6 +1204,88 @@ function bindGlobalEvents() {
             Toast.show(error.message, 'error');
         }
     });
+
+    // 3b. Forgot Password — Navegação
+    document.getElementById('btn-show-forgot').addEventListener('click', showForgotPasswordView);
+    document.getElementById('btn-back-to-login').addEventListener('click', renderAuthView);
+
+    // 3c. Forgot Password — Submit
+    document.getElementById('forgot-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('forgot-email').value.trim();
+        const btn = document.getElementById('btn-forgot-submit');
+        const originalText = btn.textContent;
+
+        try {
+            btn.disabled = true;
+            btn.textContent = 'Enviando...';
+            await api.forgotPassword(email);
+            document.getElementById('forgot-subtitle').textContent =
+                '✅ Se este e-mail estiver cadastrado, você receberá as instruções em breve. Verifique também a caixa de spam.';
+            document.getElementById('forgot-form').reset();
+            Toast.show('Instruções enviadas! Verifique seu e-mail.', 'success');
+        } catch (error) {
+            Toast.show(error.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    });
+
+    // 3d. Reset Password — Submit (tela acessada via link do e-mail)
+    document.getElementById('reset-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const password = document.getElementById('reset-password').value;
+        const confirm = document.getElementById('reset-password-confirm').value;
+        const token = e.target.dataset.token;
+        const btn = document.getElementById('btn-reset-submit');
+        const originalText = btn.textContent;
+
+        if (!token) {
+            Toast.show('Token de redefinição ausente. Solicite um novo link.', 'error');
+            return;
+        }
+        if (password.length < 6) {
+            Toast.show('A senha deve ter no mínimo 6 caracteres.', 'error');
+            return;
+        }
+        if (password !== confirm) {
+            Toast.show('As senhas não coincidem.', 'error');
+            return;
+        }
+
+        try {
+            btn.disabled = true;
+            btn.textContent = 'Salvando...';
+            await api.resetPassword(token, password);
+            Toast.show('Senha redefinida com sucesso! Faça login com sua nova senha.', 'success');
+            renderAuthView();
+        } catch (error) {
+            Toast.show(error.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    });
+
+    // 3e. Reset Password — Navegação de volta
+    const btnResetBack = document.getElementById('btn-reset-back-login');
+    if (btnResetBack) btnResetBack.addEventListener('click', renderAuthView);
+
+    // 3f. Reset Password — Toggle de visibilidade da senha
+    const btnToggleResetPw = document.getElementById('btn-toggle-reset-pw');
+    if (btnToggleResetPw) {
+        btnToggleResetPw.addEventListener('click', () => {
+            const input = document.getElementById('reset-password');
+            const isHidden = input.type === 'password';
+            input.type = isHidden ? 'text' : 'password';
+            // Alterna ícones olho aberto/fechado dentro deste botão
+            const eyeOpen = btnToggleResetPw.querySelector('svg:first-of-type');
+            const eyeClosed = btnToggleResetPw.querySelector('svg:last-of-type');
+            if (eyeOpen) eyeOpen.style.display = isHidden ? 'none' : 'block';
+            if (eyeClosed) eyeClosed.style.display = isHidden ? 'block' : 'none';
+        });
+    }
 
     // 4. Logout
     document.getElementById('btn-logout').addEventListener('click', () => {
