@@ -229,18 +229,18 @@ function renderProjectsGrid() {
 
         const ownerActionButtons = isOwner ? `
             <button class="btn btn-secondary btn-sm" onclick="openShareProjectModal(${project.id}, '${escapeHtml(project.name)}')" title="Compartilhar Projeto">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
                 <span>Compartilhar</span>
             </button>
             <button class="btn btn-secondary btn-sm" onclick="openEditProjectModal(${project.id})" title="Editar Projeto Completo">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                 <span>Editar</span>
             </button>
-            <button class="btn btn-danger btn-sm" onclick="confirmDeleteProject(${project.id}, '${escapeHtml(project.name)}')" title="Excluir Projeto">
+            <button class="btn btn-danger btn-sm btn-icon-only" onclick="confirmDeleteProject(${project.id}, '${escapeHtml(project.name)}')" title="Excluir Projeto">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
             </button>
         ` : `
-            <span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--color-text-secondary); font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.25rem;">
+            <span class="readonly-badge" title="Você tem permissão apenas de visualização e exportação">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                 Somente Leitura
             </span>
@@ -286,23 +286,26 @@ function renderProjectsGrid() {
                 </div>
 
                 <div class="card-actions">
-                    <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                    <!-- Linha 1: Ações de Consulta e Visualização (Grid balanceado) -->
+                    <div class="card-actions-row row-view ${isOwner ? '' : 'cols-2'}">
                         <button class="btn btn-secondary btn-sm" onclick="openProjectDetailsModal(${project.id})" title="Ver Detalhes do Projeto">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                             <span>Detalhes</span>
                         </button>
                         ${isOwner ? `
                         <button class="btn btn-secondary btn-sm" onclick="openProjectActivitiesModal(${project.id})" title="Visualizar e Editar Etapas">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
                             <span>Etapas</span>
                         </button>
                         ` : ''}
                         <button class="btn btn-secondary btn-sm" onclick="exportProjectToPdf(${project.id})" title="Exportar Projeto em PDF">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-                            <span>Exportar PDF</span>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                            <span>Exportar</span>
                         </button>
                     </div>
-                    <div style="display: flex; gap: 0.35rem; margin-left: auto; align-items: center;">
+
+                    <!-- Linha 2: Ações de Gestão / Propriedade -->
+                    <div class="card-actions-row row-manage">
                         ${ownerActionButtons}
                     </div>
                 </div>

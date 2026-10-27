@@ -994,11 +994,81 @@ button, input, select, textarea {
 
 .card-actions {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
+    flex-direction: column;
+    gap: 0.55rem;
     border-top: 1px solid var(--color-border);
-    padding-top: 1rem;
+    padding-top: 0.85rem;
+    margin-top: auto;
+}
+
+.card-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+}
+
+.card-actions-row.row-view {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+}
+
+.card-actions-row.row-view.cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.card-actions-row.row-view .btn {
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    justify-content: center;
+}
+
+.card-actions-row.row-manage {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.4rem;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    padding-top: 0.55rem;
+}
+
+[data-theme="light"] .card-actions-row.row-manage {
+    border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+.card-actions-row.row-manage .btn {
+    padding: 0.38rem 0.65rem;
+    font-size: 0.78rem;
+}
+
+.btn-icon-only {
+    padding: 0.4rem 0.55rem !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+}
+
+.readonly-badge {
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.35rem 0.65rem;
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid var(--color-border);
+}
+
+.tag-shared {
+    background: rgba(56, 189, 248, 0.12);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
 }
 
 /* Empty State */
