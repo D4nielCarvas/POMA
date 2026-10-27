@@ -47,23 +47,33 @@ class ApiClient {
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
         }
-
         try {
             const response = await fetch(url, {
                 ...options,
                 headers
             });
 
+            let data = null;
+            try {
+                data = await response.json();
+            } catch {
+                // Corpo não é JSON válido ou vazio
+            }
+
+            const isAuthRoute = (endpoint.startsWith('/auth/') || endpoint.startsWith('/api/auth/')) && !endpoint.endsWith('/me');
+
             if (response.status === 401) {
+                if (isAuthRoute) {
+                    throw new Error(data?.error || 'Credenciais inválidas. Verifique seu e-mail e senha.');
+                }
                 this.setToken(null);
                 this.setUser(null);
                 window.dispatchEvent(new CustomEvent('auth:expired'));
-                throw new Error('Sessão expirada. Faça login novamente.');
+                throw new Error(data?.error || 'Sessão expirada. Faça login novamente.');
             }
 
-            const data = await response.json();
-            if (!response.ok || data.success === false) {
-                throw new Error(data.error || 'Ocorreu um erro na requisição.');
+            if (!response.ok || (data && data.success === false)) {
+                throw new Error(data?.error || 'Ocorreu um erro na requisição.');
             }
 
             return data;
