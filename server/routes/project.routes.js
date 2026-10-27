@@ -14,4 +14,9 @@ router.put('/:id', ProjectController.update);
 router.delete('/:id', ProjectController.delete);
 router.patch('/:projectId/activities/:activityId', ProjectController.updateActivityStatus);
 
+// Rotas de Compartilhamento de Projetos
+router.get('/:id/shares', ProjectController.getShares);
+router.post('/:id/shares', ProjectController.share);
+router.delete('/:id/shares/:userId', ProjectController.removeShare);
+
 module.exports = router;

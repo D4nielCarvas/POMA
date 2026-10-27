@@ -159,6 +159,27 @@ class ApiClient {
         });
         return res.data;
     }
+
+    // Compartilhamentos
+    async getProjectShares(projectId) {
+        const res = await this.request(`/projects/${projectId}/shares`);
+        return res.data;
+    }
+
+    async shareProject(projectId, email) {
+        const res = await this.request(`/projects/${projectId}/shares`, {
+            method: 'POST',
+            body: JSON.stringify({ email })
+        });
+        return res;
+    }
+
+    async removeProjectShare(projectId, userId) {
+        const res = await this.request(`/projects/${projectId}/shares/${userId}`, {
+            method: 'DELETE'
+        });
+        return res;
+    }
 }
 
 const api = new ApiClient();

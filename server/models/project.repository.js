@@ -12,30 +12,36 @@ class ProjectRepository {
     }
 
     // -------------------------------------------------------------------------
-    // FIND ALL
     // -------------------------------------------------------------------------
-    findAll(userId, filters = {}) {
+    // FIND ALL (Projetos próprios OU compartilhados)
+    // -------------------------------------------------------------------------
+    findAll(userId, filters = {}, sharedProjectIds = []) {
         if (this.supabase) {
-            return this._findAllSupabase(userId, filters);
+            return this._findAllSupabase(userId, filters, sharedProjectIds);
         }
-        return this._findAllSqlite(userId, filters);
+        return this._findAllSqlite(userId, filters, sharedProjectIds);
     }
 
-    _findAllSupabase(userId, filters = {}) {
-        // Supabase JS é assíncrono, mas o service chama de forma síncrona via
-        // padrão legado. Usamos a estratégia de retornar uma Promise e o service
-        // foi adaptado para await. Aqui retornamos a Promise diretamente.
+    _findAllSupabase(userId, filters = {}, sharedProjectIds = []) {
         let query = this.supabase
             .from('projects')
             .select(`
                 id, user_id, name, project_date, classification,
                 type, responsible_name, responsible_email, responsible_phone,
                 objective, location, start_date, end_date,
-                evaluation_analysis, status, created_at, updated_at
-            `)
-            .eq('user_id', userId)
-            .order('end_date', { ascending: true })
-            .order('id', { ascending: false });
+                evaluation_analysis, status, created_at, updated_at,
+                users:user_id (id, name, email)
+            `);
+
+        // Filtra por projetos próprios OU projetos compartilhados com o usuário
+        if (Array.isArray(sharedProjectIds) && sharedProjectIds.length > 0) {
+            query = query.or(`user_id.eq.${userId},id.in.(${sharedProjectIds.join(',')})`);
+        } else {
+            query = query.eq('user_id', userId);
+        }
+
+        query = query.order('end_date', { ascending: true })
+                     .order('id', { ascending: false });
 
         if (filters.classification) query = query.eq('classification', filters.classification);
         if (filters.type)           query = query.eq('type', filters.type);
@@ -50,26 +56,41 @@ class ProjectRepository {
         return query.then(({ data, error }) => {
             if (error) {
                 console.error('[Supabase ProjectRepository] findAll error:', error.message);
-                return this._findAllSqlite(userId, filters);
+                return this._findAllSqlite(userId, filters, sharedProjectIds);
             }
-            return data || [];
+            return (data || []).map(row => ({
+                ...row,
+                creator_name: row.users?.name || null,
+                creator_email: row.users?.email || null
+            }));
         });
     }
 
-    _findAllSqlite(userId, filters = {}) {
+    _findAllSqlite(userId, filters = {}, sharedProjectIds = []) {
         let sql = `
             SELECT
                 p.id, p.user_id, p.name, p.project_date, p.classification,
                 p.type, p.responsible_name, p.responsible_email, p.responsible_phone,
                 p.objective, p.location, p.start_date, p.end_date,
                 p.evaluation_analysis, p.status, p.created_at, p.updated_at,
+                u.name AS creator_name,
+                u.email AS creator_email,
                 COUNT(pa.id) as total_activities,
                 SUM(CASE WHEN pa.status = 'Concluída' THEN 1 ELSE 0 END) as completed_activities
             FROM projects p
+            JOIN users u ON p.user_id = u.id
             LEFT JOIN project_activities pa ON p.id = pa.project_id
-            WHERE p.user_id = ?
+            WHERE (p.user_id = ?
         `;
         const params = [userId];
+
+        if (Array.isArray(sharedProjectIds) && sharedProjectIds.length > 0) {
+            const placeholders = sharedProjectIds.map(() => '?').join(',');
+            sql += ` OR p.id IN (${placeholders}))`;
+            params.push(...sharedProjectIds);
+        } else {
+            sql += `)`;
+        }
 
         if (filters.classification) { sql += ` AND p.classification = ?`; params.push(filters.classification); }
         if (filters.type)           { sql += ` AND p.type = ?`;           params.push(filters.type); }
@@ -89,46 +110,67 @@ class ProjectRepository {
     }
 
     // -------------------------------------------------------------------------
-    // FIND BY ID
+    // FIND BY ID (Acesso por proprietário OU usuário compartilhado)
     // -------------------------------------------------------------------------
-    findById(id, userId, client = null) {
+    findById(id, userId = null, client = null) {
         if (this.supabase && !client) {
             return this._findByIdSupabase(id, userId);
         }
         return this._findByIdSqlite(id, userId, client);
     }
 
-    _findByIdSupabase(id, userId) {
-        return this.supabase
+    _findByIdSupabase(id, userId = null) {
+        let query = this.supabase
             .from('projects')
             .select(`
                 id, user_id, name, project_date, classification,
                 type, responsible_name, responsible_email, responsible_phone,
                 objective, location, start_date, end_date,
-                evaluation_analysis, status, created_at, updated_at
+                evaluation_analysis, status, created_at, updated_at,
+                users:user_id (id, name, email)
             `)
-            .eq('id', id)
-            .eq('user_id', userId)
-            .maybeSingle()
+            .eq('id', id);
+
+        if (userId !== null && userId !== undefined) {
+            query = query.eq('user_id', userId);
+        }
+
+        return query.maybeSingle()
             .then(({ data, error }) => {
                 if (error) {
                     console.error('[Supabase ProjectRepository] findById error:', error.message);
                     return this._findByIdSqlite(id, userId);
                 }
-                return data || null;
+                if (!data) return null;
+                return {
+                    ...data,
+                    creator_name: data.users?.name || null,
+                    creator_email: data.users?.email || null
+                };
             });
     }
 
-    _findByIdSqlite(id, userId, client = null) {
+    _findByIdSqlite(id, userId = null, client = null) {
         const db = client || this.db;
-        const row = db.prepare(`
-            SELECT id, user_id, name, project_date, classification,
-                type, responsible_name, responsible_email, responsible_phone,
-                objective, location, start_date, end_date,
-                evaluation_analysis, status, created_at, updated_at
-            FROM projects
-            WHERE id = ? AND user_id = ?
-        `).get(id, userId);
+        let sql = `
+            SELECT p.id, p.user_id, p.name, p.project_date, p.classification,
+                p.type, p.responsible_name, p.responsible_email, p.responsible_phone,
+                p.objective, p.location, p.start_date, p.end_date,
+                p.evaluation_analysis, p.status, p.created_at, p.updated_at,
+                u.name AS creator_name,
+                u.email AS creator_email
+            FROM projects p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.id = ?
+        `;
+        const params = [id];
+
+        if (userId !== null && userId !== undefined) {
+            sql += ` AND p.user_id = ?`;
+            params.push(userId);
+        }
+
+        const row = db.prepare(sql).get(...params);
         return row || null;
     }
 

@@ -2,6 +2,8 @@ const ProjectRepository = require('../models/project.repository');
 const ActivityRepository = require('../models/activity.repository');
 const ResponsibleRepository = require('../models/responsible.repository');
 const LocationRepository = require('../models/location.repository');
+const ProjectShareRepository = require('../models/project-share.repository');
+const UserRepository = require('../models/user.repository');
 const AlertService = require('./alert.service');
 const { getDatabaseHelper } = require('../config/database');
 const { isSupabaseConfigured } = require('../config/supabase');
@@ -12,18 +14,25 @@ class ProjectService {
         activityRepo = null,
         responsibleRepo = null,
         locationRepo = null,
-        dbHelper = null
+        dbHelper = null,
+        shareRepo = null,
+        userRepo = null
     ) {
         this.projectRepo = projectRepo || new ProjectRepository();
         this.activityRepo = activityRepo || new ActivityRepository();
         this.responsibleRepo = responsibleRepo || new ResponsibleRepository();
         this.locationRepo = locationRepo || new LocationRepository();
+        this.shareRepo = shareRepo || new ProjectShareRepository();
+        this.userRepo = userRepo || new UserRepository();
         this.dbHelper = dbHelper || getDatabaseHelper();
     }
 
     async getProjects(userId, filters = {}) {
-        // Supabase retorna Promises; SQLite retorna arrays síncronos
-        const rawProjects = await Promise.resolve(this.projectRepo.findAll(userId, filters));
+        // 1. Busca IDs de projetos compartilhados com este usuário
+        const sharedProjectIds = await Promise.resolve(this.shareRepo.findSharedProjectIdsByUser(userId));
+
+        // 2. Busca projetos próprios + projetos compartilhados
+        const rawProjects = await Promise.resolve(this.projectRepo.findAll(userId, filters, sharedProjectIds));
         const projectIds = rawProjects.map(p => p.id);
 
         // Carregamento em lote (Batch Loading O(1) queries para evitar o problema N+1)
@@ -52,8 +61,9 @@ class ProjectService {
             locationsByProject.get(loc.project_id).push(loc);
         }
 
-        // Enriquece projetos com alertas, atividades, múltiplos responsáveis e múltiplos locais
+        // Enriquece projetos com alertas, atividades, múltiplos responsáveis, locais e permissões
         const enrichedProjects = rawProjects.map(project => {
+            const isOwner = Number(project.user_id) === Number(userId);
             const activities = activitiesByProject.get(project.id) || [];
             const responsibles = responsiblesByProject.get(project.id) || (
                 project.responsible_name ? [{
@@ -69,6 +79,10 @@ class ProjectService {
             const enriched = AlertService.enrichProjectWithAlerts(project, activities);
             return {
                 ...enriched,
+                is_owner: isOwner,
+                can_edit: isOwner,
+                can_delete: isOwner,
+                can_export: true,
                 responsibles,
                 locations
             };
@@ -100,9 +114,21 @@ class ProjectService {
     }
 
     async getProjectById(id, userId) {
-        const project = await Promise.resolve(this.projectRepo.findById(id, userId));
+        // Busca o projeto sem restrição estrita de user_id primeiro
+        const project = await Promise.resolve(this.projectRepo.findById(id));
         if (!project) {
             throw new Error('Projeto não encontrado ou você não tem permissão para acessá-lo.');
+        }
+
+        const isOwner = Number(project.user_id) === Number(userId);
+        if (!isOwner) {
+            // Verifica se está compartilhado com o usuário
+            const isShared = await Promise.resolve(this.shareRepo.isProjectSharedWithUser(id, userId));
+            if (!isShared) {
+                const err = new Error('Projeto não encontrado ou você não tem permissão para acessá-lo.');
+                err.status = 403;
+                throw err;
+            }
         }
 
         const [activities, responsibles, locations] = await Promise.all([
@@ -114,6 +140,10 @@ class ProjectService {
         const enriched = AlertService.enrichProjectWithAlerts(project, activities);
         return {
             ...enriched,
+            is_owner: isOwner,
+            can_edit: isOwner,
+            can_delete: isOwner,
+            can_export: true,
             responsibles: responsibles.length > 0 ? responsibles : (
                 project.responsible_name ? [{
                     name: project.responsible_name,
@@ -333,7 +363,7 @@ class ProjectService {
     async updateActivityStatus(activityId, projectId, userId, newStatus) {
         const project = await Promise.resolve(this.projectRepo.findById(projectId, userId));
         if (!project) {
-            throw new Error('Projeto não encontrado.');
+            throw new Error('Projeto não encontrado ou você não possui permissão para alterá-lo.');
         }
 
         const validStatuses = ['Pendente', 'Em Andamento', 'Concluída'];
@@ -347,6 +377,73 @@ class ProjectService {
         }
 
         return this.getProjectById(projectId, userId);
+    }
+
+    // =========================================================================
+    // MÉTODOS DE COMPARTILHAMENTO DE PROJETOS
+    // =========================================================================
+
+    /**
+     * Lista os usuários com os quais o projeto está compartilhado (apenas criador)
+     */
+    async getProjectShares(projectId, userId) {
+        const project = await Promise.resolve(this.projectRepo.findById(projectId, userId));
+        if (!project) {
+            throw new Error('Projeto não encontrado ou você não possui permissão para gerenciar compartilhamentos.');
+        }
+
+        return this.shareRepo.findSharesByProjectId(projectId);
+    }
+
+    /**
+     * Compartilha o projeto com um usuário pelo e-mail (apenas criador)
+     */
+    async shareProject(projectId, userId, targetEmail) {
+        if (!targetEmail || typeof targetEmail !== 'string') {
+            throw new Error('O e-mail do usuário para compartilhamento é obrigatório.');
+        }
+
+        const project = await Promise.resolve(this.projectRepo.findById(projectId, userId));
+        if (!project) {
+            throw new Error('Projeto não encontrado ou você não possui permissão para compartilhá-lo.');
+        }
+
+        const normalizedEmail = targetEmail.trim().toLowerCase();
+        const targetUser = await Promise.resolve(this.userRepo.findByEmail(normalizedEmail));
+        if (!targetUser) {
+            throw new Error('Nenhum usuário cadastrado encontrado com o e-mail informado.');
+        }
+
+        if (Number(targetUser.id) === Number(userId)) {
+            throw new Error('Você já é o criador e proprietário deste projeto.');
+        }
+
+        await Promise.resolve(this.shareRepo.addShare(projectId, targetUser.id));
+        return {
+            success: true,
+            message: `Projeto compartilhado com sucesso com ${targetUser.name} (${targetUser.email}).`,
+            user: {
+                id: targetUser.id,
+                name: targetUser.name,
+                email: targetUser.email
+            }
+        };
+    }
+
+    /**
+     * Remove o compartilhamento de um usuário (apenas criador)
+     */
+    async removeProjectShare(projectId, userId, targetUserId) {
+        const project = await Promise.resolve(this.projectRepo.findById(projectId, userId));
+        if (!project) {
+            throw new Error('Projeto não encontrado ou você não possui permissão para gerenciar compartilhamentos.');
+        }
+
+        await Promise.resolve(this.shareRepo.removeShare(projectId, targetUserId));
+        return {
+            success: true,
+            message: 'Compartilhamento revogado com sucesso.'
+        };
     }
 
     validateProjectData(data) {

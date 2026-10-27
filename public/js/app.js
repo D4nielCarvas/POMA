@@ -219,12 +219,40 @@ function renderProjectsGrid() {
         const startDateFmt = project.start_date ? project.start_date.split('-').reverse().join('/') : '-';
         const endDateFmt = project.end_date ? project.end_date.split('-').reverse().join('/') : '-';
 
+        const isOwner = project.is_owner !== false;
+        const creatorTag = !isOwner && project.creator_name 
+            ? `<span class="tag" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:3px;vertical-align:text-top;"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+                Compartilhado por ${escapeHtml(project.creator_name.split(' ')[0])}
+               </span>`
+            : '';
+
+        const ownerActionButtons = isOwner ? `
+            <button class="btn btn-secondary btn-sm" onclick="openShareProjectModal(${project.id}, '${escapeHtml(project.name)}')" title="Compartilhar Projeto">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                <span>Compartilhar</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="openEditProjectModal(${project.id})" title="Editar Projeto Completo">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                <span>Editar</span>
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="confirmDeleteProject(${project.id}, '${escapeHtml(project.name)}')" title="Excluir Projeto">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+        ` : `
+            <span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--color-text-secondary); font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.25rem;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                Somente Leitura
+            </span>
+        `;
+
         return `
             <article class="project-card status-${deadline.status}">
                 <div class="card-top">
                     <div class="card-tags">
                         <span class="tag tag-classification">${escapeHtml(project.classification)}</span>
                         <span class="tag tag-type">${escapeHtml(project.type)}</span>
+                        ${creatorTag}
                         <span class="badge-deadline badge-${deadline.badgeColor}">${escapeHtml(deadline.label)}</span>
                     </div>
 
@@ -263,23 +291,19 @@ function renderProjectsGrid() {
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                             <span>Detalhes</span>
                         </button>
+                        ${isOwner ? `
                         <button class="btn btn-secondary btn-sm" onclick="openProjectActivitiesModal(${project.id})" title="Visualizar e Editar Etapas">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
                             <span>Etapas</span>
                         </button>
+                        ` : ''}
                         <button class="btn btn-secondary btn-sm" onclick="exportProjectToPdf(${project.id})" title="Exportar Projeto em PDF">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-                            <span>PDF</span>
+                            <span>Exportar PDF</span>
                         </button>
                     </div>
-                    <div style="display: flex; gap: 0.35rem; margin-left: auto;">
-                        <button class="btn btn-secondary btn-sm" onclick="openEditProjectModal(${project.id})" title="Editar Projeto Completo">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                            <span>Editar</span>
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="confirmDeleteProject(${project.id}, '${escapeHtml(project.name)}')" title="Excluir Projeto">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                        </button>
+                    <div style="display: flex; gap: 0.35rem; margin-left: auto; align-items: center;">
+                        ${ownerActionButtons}
                     </div>
                 </div>
             </article>
@@ -743,6 +767,88 @@ async function saveProjectActivitiesModal() {
             openProjectDetailsModal(projectId);
         }
         loadDashboard();
+    } catch (error) {
+        Toast.show(error.message, 'error');
+    }
+}
+
+// ==========================================================================
+// MODAL DE COMPARTILHAMENTO DE PROJETOS
+// ==========================================================================
+let currentShareProjectId = null;
+
+async function openShareProjectModal(projectId, projectName) {
+    currentShareProjectId = projectId;
+    document.getElementById('share-project-modal-title').textContent = `Compartilhar: ${projectName}`;
+    document.getElementById('share-target-email').value = '';
+    document.getElementById('modal-share-project').style.display = 'flex';
+    document.getElementById('modal-share-project').classList.add('active');
+
+    await loadProjectShares(projectId);
+}
+
+function closeShareProjectModal() {
+    document.getElementById('modal-share-project').style.display = 'none';
+    document.getElementById('modal-share-project').classList.remove('active');
+    currentShareProjectId = null;
+}
+
+async function loadProjectShares(projectId) {
+    const listContainer = document.getElementById('share-users-list');
+    listContainer.innerHTML = '<div style="font-size:0.875rem; color:var(--color-text-secondary); text-align:center; padding:1rem;">Carregando acessos...</div>';
+
+    try {
+        const shares = await api.getProjectShares(projectId);
+        if (!shares || shares.length === 0) {
+            listContainer.innerHTML = `
+                <div style="font-size:0.875rem; color:var(--color-text-secondary); text-align:center; padding:1rem; border:1px dashed var(--color-border); border-radius:6px;">
+                    Este projeto ainda não foi compartilhado com nenhum outro usuário.
+                </div>
+            `;
+            return;
+        }
+
+        listContainer.innerHTML = shares.map(s => `
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem 0.75rem; background:var(--color-surface); border:1px solid var(--color-border); border-radius:6px;">
+                <div>
+                    <div style="font-weight:600; font-size:0.875rem;">${escapeHtml(s.name)}</div>
+                    <div style="font-size:0.75rem; color:var(--color-text-secondary);">${escapeHtml(s.email)}</div>
+                </div>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="handleRemoveShare(${projectId}, ${s.user_id})" title="Revogar Acesso" style="padding:0.25rem 0.5rem; font-size:0.75rem;">
+                    Revogar
+                </button>
+            </div>
+        `).join('');
+    } catch (error) {
+        listContainer.innerHTML = `<div style="color:var(--color-danger); font-size:0.875rem;">Erro ao carregar compartilhamentos: ${escapeHtml(error.message)}</div>`;
+    }
+}
+
+async function handleAddShare(e) {
+    e.preventDefault();
+    if (!currentShareProjectId) return;
+
+    const emailInput = document.getElementById('share-target-email');
+    const email = emailInput.value.trim();
+    if (!email) return;
+
+    try {
+        const res = await api.shareProject(currentShareProjectId, email);
+        Toast.show(res.message || 'Projeto compartilhado com sucesso!', 'success');
+        emailInput.value = '';
+        await loadProjectShares(currentShareProjectId);
+    } catch (error) {
+        Toast.show(error.message, 'error');
+    }
+}
+
+async function handleRemoveShare(projectId, userId) {
+    if (!confirm('Deseja realmente revogar o acesso deste usuário ao projeto?')) return;
+
+    try {
+        await api.removeProjectShare(projectId, userId);
+        Toast.show('Compartilhamento revogado com sucesso!', 'info');
+        await loadProjectShares(projectId);
     } catch (error) {
         Toast.show(error.message, 'error');
     }
@@ -1247,6 +1353,16 @@ function bindGlobalEvents() {
         document.getElementById('filter-deadline').value = '';
         loadDashboard();
     });
+
+    // 14. Compartilhamento de Projetos
+    const btnCloseShare = document.getElementById('btn-close-share-modal');
+    if (btnCloseShare) btnCloseShare.addEventListener('click', closeShareProjectModal);
+
+    const btnCloseShareFooter = document.getElementById('btn-close-share-modal-footer');
+    if (btnCloseShareFooter) btnCloseShareFooter.addEventListener('click', closeShareProjectModal);
+
+    const formAddShare = document.getElementById('form-add-share');
+    if (formAddShare) formAddShare.addEventListener('submit', handleAddShare);
 }
 
 function escapeHtml(str) {

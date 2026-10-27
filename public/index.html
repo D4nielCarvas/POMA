@@ -732,6 +732,56 @@
         </div>
     </div>
 
+    <!-- ====================================================================
+         MODAL: COMPARTILHAMENTO DE PROJETO
+         ==================================================================== -->
+    <div class="modal-overlay" id="modal-share-project" style="display: none;">
+        <div class="modal-card" style="max-width: 540px;">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <span class="modal-badge-id">Compartilhar</span>
+                    <h2 id="share-project-modal-title">Compartilhar Projeto</h2>
+                </div>
+                <button class="btn-icon" id="btn-close-share-modal" aria-label="Fechar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <p style="font-size: 0.875rem; color: var(--color-text-secondary); margin-bottom: 1.25rem;">
+                    Usuários com quem este projeto for compartilhado terão permissão de <strong>visualização e exportação</strong> dos dados. Apenas você (criador) pode editar ou excluir.
+                </p>
+
+                <!-- Formulário de Compartilhamento -->
+                <form id="form-add-share" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
+                    <input type="email" id="share-target-email" class="form-input" placeholder="Digite o e-mail do usuário..." required style="flex: 1;">
+                    <button type="submit" class="btn btn-primary" id="btn-submit-share" style="white-space: nowrap;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>Adicionar</span>
+                    </button>
+                </form>
+
+                <div class="form-section-title" style="margin-top: 0;">
+                    <span>Usuários com Acesso</span>
+                </div>
+
+                <div id="share-users-list" style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <!-- Renderizado dinamicamente via JS -->
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="btn-close-share-modal-footer">Fechar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts da Aplicação -->
     <script src="js/api.js"></script>
     <script src="js/components/toast.js"></script>

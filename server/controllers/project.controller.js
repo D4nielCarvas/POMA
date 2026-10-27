@@ -103,6 +103,51 @@ class ProjectController {
             next(error);
         }
     }
+
+    static async getShares(req, res, next) {
+        try {
+            const userId = req.user.id;
+            const projectId = Number(req.params.id);
+            const shares = await projectService.getProjectShares(projectId, userId);
+            return res.status(200).json({
+                success: true,
+                data: shares
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    static async share(req, res, next) {
+        try {
+            const userId = req.user.id;
+            const projectId = Number(req.params.id);
+            const { email } = req.body;
+            const result = await projectService.shareProject(projectId, userId, email);
+            return res.status(200).json({
+                success: true,
+                message: result.message,
+                data: result.user
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    static async removeShare(req, res, next) {
+        try {
+            const userId = req.user.id;
+            const projectId = Number(req.params.id);
+            const targetUserId = Number(req.params.userId);
+            const result = await projectService.removeProjectShare(projectId, userId, targetUserId);
+            return res.status(200).json({
+                success: true,
+                message: result.message
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = ProjectController;

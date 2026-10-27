@@ -94,6 +94,20 @@ CREATE TABLE IF NOT EXISTS project_locations (
 
 CREATE INDEX IF NOT EXISTS idx_locations_project_id ON project_locations(project_id);
 
+-- Tabela de Compartilhamentos de Projetos (1:N usuários permitidos a visualizar/exportar)
+CREATE TABLE IF NOT EXISTS project_shares (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    shared_with_user_id INTEGER NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (shared_with_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE (project_id, shared_with_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_shares_user ON project_shares(shared_with_user_id);
+CREATE INDEX IF NOT EXISTS idx_project_shares_project ON project_shares(project_id);
+
 -- ====================================================================
 -- ESQUEMA 2: POSTGRESQL / SUPABASE COM ROW LEVEL SECURITY (RLS)
 -- (Script pronto para migração para nuvem/PostgreSQL)
