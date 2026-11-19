@@ -6,23 +6,31 @@ const authService = new AuthService();
 
 const authMiddleware = (req, res, next) => {
     try {
-        const authHeader = req.headers.authorization;
-        if (!authHeader) {
+        let token = null;
+
+        // 1. Tenta obter o token do cookie seguro HttpOnly
+        if (req.cookies && req.cookies.nexus_token) {
+            token = req.cookies.nexus_token;
+        }
+
+        // 2. Fallback para cabeçalho Authorization: Bearer <token>
+        if (!token) {
+            const authHeader = req.headers.authorization;
+            if (authHeader) {
+                const parts = authHeader.split(' ');
+                if (parts.length === 2 && parts[0] === 'Bearer') {
+                    token = parts[1];
+                }
+            }
+        }
+
+        if (!token) {
             return res.status(401).json({
                 success: false,
                 error: 'Token de autorização não fornecido. Faça login para continuar.'
             });
         }
 
-        const parts = authHeader.split(' ');
-        if (parts.length !== 2 || parts[0] !== 'Bearer') {
-            return res.status(401).json({
-                success: false,
-                error: 'Formato de token inválido. Esperado: Bearer <token>'
-            });
-        }
-
-        const token = parts[1];
         const decoded = authService.verifyToken(token);
 
         // Verifica se o usuário do token ainda existe no banco local (SQLite).

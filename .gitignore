@@ -25,3 +25,6 @@ logs/
 Thumbs.db
 .vscode/
 .idea/
+
+# Controle interno de tarefas e contexto (não versionado)
+TODO_CONTEXTO.md

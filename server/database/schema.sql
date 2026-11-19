@@ -54,6 +54,8 @@ CREATE INDEX IF NOT EXISTS idx_projects_classification ON projects(classificatio
 CREATE INDEX IF NOT EXISTS idx_projects_type ON projects(type);
 CREATE INDEX IF NOT EXISTS idx_projects_end_date ON projects(end_date);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+CREATE INDEX IF NOT EXISTS idx_projects_user_status ON projects(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_projects_user_end_date ON projects(user_id, end_date);
 
 CREATE TABLE IF NOT EXISTS project_activities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,6 +70,7 @@ CREATE TABLE IF NOT EXISTS project_activities (
 CREATE INDEX IF NOT EXISTS idx_activities_project_id ON project_activities(project_id);
 CREATE INDEX IF NOT EXISTS idx_activities_target_date ON project_activities(target_date);
 CREATE INDEX IF NOT EXISTS idx_activities_status ON project_activities(status);
+CREATE INDEX IF NOT EXISTS idx_activities_proj_status ON project_activities(project_id, status);
 
 -- Tabela de Responsáveis por Projeto (1 ou mais por projeto)
 CREATE TABLE IF NOT EXISTS project_responsibles (

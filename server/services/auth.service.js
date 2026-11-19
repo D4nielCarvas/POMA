@@ -2,7 +2,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const UserRepository = require('../models/user.repository');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'gestao-projetos-secret-key-prod-2026';
+// Em produção, a chave JWT deve ser obrigatoriamente configurada nas variáveis de ambiente
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+    console.error('[FATAL SECURITY ERROR] A variável de ambiente JWT_SECRET é obrigatória em ambiente de produção.');
+    process.exit(1);
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || 'gestao-projetos-secret-key-dev-only-2026';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 class AuthService {

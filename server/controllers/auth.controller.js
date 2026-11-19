@@ -5,10 +5,20 @@ const authService = new AuthService();
 const resetService = new PasswordResetService();
 
 class AuthController {
+    static _setAuthCookie(res, token) {
+        res.cookie('nexus_token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+            maxAge: 24 * 60 * 60 * 1000 // 24 horas
+        });
+    }
+
     static async register(req, res, next) {
         try {
             const { name, email, password } = req.body;
             const result = await authService.register({ name, email, password });
+            AuthController._setAuthCookie(res, result.token);
             return res.status(201).json({
                 success: true,
                 message: 'Usuário cadastrado com sucesso!',
@@ -23,6 +33,7 @@ class AuthController {
         try {
             const { email, password } = req.body;
             const result = await authService.login({ email, password });
+            AuthController._setAuthCookie(res, result.token);
             return res.status(200).json({
                 success: true,
                 message: 'Autenticado com sucesso!',
@@ -31,6 +42,18 @@ class AuthController {
         } catch (error) {
             next(error);
         }
+    }
+
+    static async logout(req, res) {
+        res.clearCookie('nexus_token', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+        });
+        return res.status(200).json({
+            success: true,
+            message: 'Logout realizado com sucesso.'
+        });
     }
 
     static async me(req, res, next) {

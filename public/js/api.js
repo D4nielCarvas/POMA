@@ -50,7 +50,8 @@ class ApiClient {
         try {
             const response = await fetch(url, {
                 ...options,
-                headers
+                headers,
+                credentials: 'include' // Envia e recebe cookies HttpOnly de forma automática
             });
 
             let data = null;
@@ -104,7 +105,12 @@ class ApiClient {
         return res.data;
     }
 
-    logout() {
+    async logout() {
+        try {
+            await this.request('/auth/logout', { method: 'POST' });
+        } catch (e) {
+            // Se der erro na rede, limpa localmente de qualquer forma
+        }
         this.setToken(null);
         this.setUser(null);
         window.dispatchEvent(new CustomEvent('auth:logout'));

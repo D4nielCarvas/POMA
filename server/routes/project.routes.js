@@ -1,6 +1,7 @@
 const express = require('express');
 const ProjectController = require('../controllers/project.controller');
 const authMiddleware = require('../middleware/auth.middleware');
+const { projectSchema, validateBody } = require('../validators/project.validator');
 
 const router = express.Router();
 
@@ -8,9 +9,9 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.get('/', ProjectController.list);
-router.post('/', ProjectController.create);
+router.post('/', validateBody(projectSchema), ProjectController.create);
 router.get('/:id', ProjectController.getById);
-router.put('/:id', ProjectController.update);
+router.put('/:id', validateBody(projectSchema), ProjectController.update);
 router.delete('/:id', ProjectController.delete);
 router.patch('/:projectId/activities/:activityId', ProjectController.updateActivityStatus);
 
