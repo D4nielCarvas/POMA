@@ -15,6 +15,7 @@ const state = {
         search: ''
     },
     sort: 'end_date',          // 'end_date' | 'name_asc' | 'name_desc'
+    currentView: 'grid',       // 'grid' | 'kanban'
     editingProjectId: null,
     currentDetailProject: null,
     currentActivitiesProjectId: null,
@@ -368,6 +369,210 @@ function renderProjectsGrid() {
             </article>
         `;
     }).join('');
+
+    // Também atualiza o Kanban para sincronização
+    renderKanbanBoard(sorted);
+}
+
+// ==========================================================================
+// RENDERIZAÇÃO DO QUADRO KANBAN
+// ==========================================================================
+function renderKanbanBoard(projectsList = state.projects) {
+    const kanbanContainer = document.getElementById('projects-kanban');
+    if (!kanbanContainer) return;
+
+    const columns = [
+        { id: 'Pendente', title: 'Pendente', icon: '⏳' },
+        { id: 'Em Andamento', title: 'Em Andamento', icon: '🚀' },
+        { id: 'Concluído', title: 'Concluído', icon: '✅' },
+        { id: 'Cancelado', title: 'Cancelado', icon: '🚫' }
+    ];
+
+    kanbanContainer.innerHTML = columns.map(col => {
+        const colProjects = projectsList.filter(p => (p.status || 'Em Andamento') === col.id);
+        return `
+            <div class="kanban-column" data-status="${col.id}">
+                <div class="kanban-column-header">
+                    <span class="kanban-column-title">
+                        <span>${col.icon}</span>
+                        <span>${col.title}</span>
+                    </span>
+                    <span class="kanban-badge-count">${colProjects.length}</span>
+                </div>
+                <div class="kanban-cards-container" data-status="${col.id}">
+                    ${colProjects.map(p => {
+                        const deadline = p.deadline_info || {};
+                        const activities = p.activities_summary || { total: 0, completed: 0 };
+                        return `
+                            <div class="kanban-card" draggable="${p.can_edit !== false}" data-project-id="${p.id}">
+                                <div class="card-tags" style="margin-bottom: 0.35rem;">
+                                    <span class="badge-deadline badge-${deadline.badgeColor || 'info'}" style="font-size: 0.7rem; padding: 2px 6px;">
+                                        ${escapeHtml(deadline.label || p.status)}
+                                    </span>
+                                </div>
+                                <div class="kanban-card-title">${escapeHtml(p.name)}</div>
+                                <div class="kanban-card-meta">
+                                    <span>👤 ${escapeHtml(p.responsible_name || 'Sem responsável')}</span>
+                                    <span>📍 ${escapeHtml(p.location || 'Sem local')}</span>
+                                    <span>📅 Término: ${p.end_date ? p.end_date.split('-').reverse().join('/') : '-'}</span>
+                                    <span style="font-weight: 500; color: var(--color-primary-500);">✓ ${activities.completed}/${activities.total} etapas concluídas</span>
+                                </div>
+                                <div style="display: flex; gap: 4px; margin-top: 0.6rem; justify-content: flex-end;">
+                                    <button class="btn btn-secondary btn-sm" onclick="openProjectDetailsModal(${p.id})" style="padding: 2px 8px; font-size: 0.72rem;">Detalhes</button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    bindKanbanDragAndDrop();
+}
+
+function bindKanbanDragAndDrop() {
+    const cards = document.querySelectorAll('.kanban-card[draggable="true"]');
+    const containers = document.querySelectorAll('.kanban-cards-container');
+
+    cards.forEach(card => {
+        card.addEventListener('dragstart', (e) => {
+            card.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', card.dataset.projectId);
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        card.addEventListener('dragend', () => {
+            card.classList.remove('dragging');
+        });
+    });
+
+    containers.forEach(container => {
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            container.classList.add('drag-over');
+        });
+
+        container.addEventListener('dragleave', () => {
+            container.classList.remove('drag-over');
+        });
+
+        container.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            container.classList.remove('drag-over');
+            const projectId = Number(e.dataTransfer.getData('text/plain'));
+            const newStatus = container.dataset.status;
+
+            const project = state.projects.find(p => p.id === projectId);
+            if (!project || project.status === newStatus) return;
+
+            try {
+                // Atualização otimista no estado local
+                project.status = newStatus;
+                renderProjectsGrid();
+
+                // Monta payload completo para update
+                const payload = {
+                    name: project.name,
+                    classification: project.classification,
+                    type: project.type,
+                    projectDate: project.project_date,
+                    startDate: project.start_date,
+                    endDate: project.end_date,
+                    objective: project.objective,
+                    evaluationAnalysis: project.evaluation_analysis,
+                    status: newStatus,
+                    responsibles: project.responsibles && project.responsibles.length > 0 
+                        ? project.responsibles 
+                        : [{ name: project.responsible_name, email: project.responsible_email, phone: project.responsible_phone }],
+                    locations: project.locations ? project.locations.map(l => typeof l === 'string' ? l : l.name) : [project.location],
+                    activities: project.activities || []
+                };
+
+                await api.updateProject(projectId, payload);
+                Toast.show(`Status alterado para "${newStatus}"!`, 'success');
+                scheduleDashboardReload(300);
+            } catch (err) {
+                Toast.show(`Erro ao alterar status: ${err.message}`, 'error');
+                scheduleDashboardReload(100);
+            }
+        });
+    });
+}
+
+// ==========================================================================
+// EXPORTAÇÃO ANALÍTICA PARA CSV (EXCEL)
+// ==========================================================================
+function exportProjectsToCSV() {
+    if (!state.projects || state.projects.length === 0) {
+        Toast.show('Nenhum projeto disponível para exportação com os filtros atuais.', 'warning');
+        return;
+    }
+
+    const headers = [
+        'ID',
+        'Nome do Projeto',
+        'Classificacao',
+        'Tipo',
+        'Status',
+        'Situacao Prazo',
+        'Data Inicio',
+        'Data Termino',
+        'Responsavel Principal',
+        'Email Responsavel',
+        'Local Principal',
+        'Total Etapas',
+        'Etapas Concluidas',
+        'Progresso %',
+        'Objetivo'
+    ];
+
+    const escapeCsv = (str) => {
+        if (str === null || str === undefined) return '""';
+        const formatted = String(str).replace(/"/g, '""').replace(/\r?\n/g, ' ');
+        return `"${formatted}"`;
+    };
+
+    const rows = state.projects.map(p => {
+        const activities = p.activities_summary || { total: 0, completed: 0 };
+        const percent = activities.total > 0 ? Math.round((activities.completed / activities.total) * 100) : (p.status === 'Concluído' ? 100 : 0);
+        const deadline = p.deadline_info || {};
+
+        return [
+            p.id,
+            escapeCsv(p.name),
+            escapeCsv(p.classification),
+            escapeCsv(p.type),
+            escapeCsv(p.status),
+            escapeCsv(deadline.label || '-'),
+            escapeCsv(p.start_date),
+            escapeCsv(p.end_date),
+            escapeCsv(p.responsible_name),
+            escapeCsv(p.responsible_email),
+            escapeCsv(p.location),
+            activities.total,
+            activities.completed,
+            `${percent}%`,
+            escapeCsv(p.objective)
+        ].join(';');
+    });
+
+    // Inclusão do BOM (Byte Order Mark) para garantir compatibilidade com UTF-8 no Microsoft Excel
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    const dateStr = new Date().toISOString().split('T')[0];
+    link.setAttribute('href', url);
+    link.setAttribute('download', `relatorio_projetos_poma_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    Toast.show('Relatório analítico exportado em CSV com sucesso!', 'success');
 }
 
 // ==========================================================================
@@ -1530,6 +1735,37 @@ function bindGlobalEvents() {
         state.sort = e.target.value;
         renderProjectsGrid(); // apenas re-renderiza, sem chamar a API
     });
+
+    // 11. Alternância de Modo de Visualização (Grade / Kanban)
+    const btnGrid = document.getElementById('btn-view-grid');
+    const btnKanban = document.getElementById('btn-view-kanban');
+    const gridContainer = document.getElementById('projects-grid');
+    const kanbanContainer = document.getElementById('projects-kanban');
+
+    if (btnGrid && btnKanban) {
+        btnGrid.addEventListener('click', () => {
+            state.currentView = 'grid';
+            btnGrid.classList.add('active-view-btn');
+            btnKanban.classList.remove('active-view-btn');
+            gridContainer.style.display = 'grid';
+            kanbanContainer.style.display = 'none';
+        });
+
+        btnKanban.addEventListener('click', () => {
+            state.currentView = 'kanban';
+            btnKanban.classList.add('active-view-btn');
+            btnGrid.classList.remove('active-view-btn');
+            gridContainer.style.display = 'none';
+            kanbanContainer.style.display = 'grid';
+            renderKanbanBoard();
+        });
+    }
+
+    // 12. Exportação de Relatório Analítico em Planilha CSV
+    const btnExportCsv = document.getElementById('btn-export-csv');
+    if (btnExportCsv) {
+        btnExportCsv.addEventListener('click', exportProjectsToCSV);
+    }
 
     document.getElementById('btn-reset-filters').addEventListener('click', () => {
         state.filters = { classification: '', type: '', deadline_status: '', search: '' };
