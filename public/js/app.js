@@ -14,9 +14,12 @@ const state = {
         deadline_status: '',
         search: ''
     },
+    sort: 'end_date',          // 'end_date' | 'name_asc' | 'name_desc'
     editingProjectId: null,
     currentDetailProject: null,
-    currentActivitiesProjectId: null
+    currentActivitiesProjectId: null,
+    _cachedProjectForActivities: null, // cache para evitar round-trip extra em saveProjectActivitiesModal
+    _dashboardDebounceTimer: null      // debounce para loadDashboard
 };
 
 // ==========================================================================
@@ -153,7 +156,18 @@ function renderAuthenticatedUI() {
 // ==========================================================================
 // CARREGAMENTO DO DASHBOARD E DADOS
 // ==========================================================================
+
+/**
+ * Debounce para loadDashboard — evita múltiplas requisições em sequência
+ * quando várias operações disparam a recarga em cascata.
+ */
+function scheduleDashboardReload(delayMs = 80) {
+    clearTimeout(state._dashboardDebounceTimer);
+    state._dashboardDebounceTimer = setTimeout(() => loadDashboard(), delayMs);
+}
+
 async function loadDashboard() {
+    clearTimeout(state._dashboardDebounceTimer);
     try {
         const data = await api.getProjects(state.filters);
         state.projects = data.projects || [];
@@ -242,7 +256,16 @@ function renderProjectsGrid() {
         return;
     }
 
-    grid.innerHTML = state.projects.map(project => {
+    // Ordenação client-side (server retorna por end_date; aqui aplicamos a preferência do usuário)
+    const sorted = [...state.projects];
+    if (state.sort === 'name_asc') {
+        sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' }));
+    } else if (state.sort === 'name_desc') {
+        sorted.sort((a, b) => (b.name || '').localeCompare(a.name || '', 'pt-BR', { sensitivity: 'base' }));
+    }
+    // 'end_date' mantém a ordem original do servidor (já ordenado por end_date ASC)
+
+    grid.innerHTML = sorted.map(project => {
         const deadline = project.deadline_info || {};
         const activities = project.activities_summary || { total: 0, completed: 0 };
         const percentCompleted = activities.total > 0 
@@ -566,6 +589,8 @@ async function openProjectDetailsModal(projectId) {
     try {
         const project = await api.getProjectById(projectId);
         state.currentDetailProject = project;
+        // Pré-popula o cache de atividades para evitar round-trip ao abrir o modal de etapas
+        state._cachedProjectForActivities = project;
 
         document.getElementById('details-modal-name').textContent = project.name;
         
@@ -667,11 +692,11 @@ function renderDetailsTimeline(project) {
         try {
             const updated = await api.updateActivityStatus(projectId, activityId, newStatus);
             Toast.show('Status da etapa atualizado com sucesso!', 'success');
-            // Atualiza a visualização da modal
+            // Atualiza a visualização da modal imediatamente sem esperar o dashboard
             state.currentDetailProject = updated;
             renderDetailsTimeline(updated);
-            // Recarrega o dashboard em segundo plano
-            loadDashboard();
+            // Recarrega o dashboard em segundo plano com debounce (evita flood de requisições)
+            scheduleDashboardReload(500);
         } catch (error) {
             Toast.show(error.message, 'error');
         }
@@ -688,7 +713,21 @@ function closeDetailsModal() {
 // ==========================================================================
 async function openProjectActivitiesModal(projectId) {
     try {
-        const project = await api.getProjectById(projectId);
+        // Tenta usar o projeto já carregado no modal de detalhes (evita round-trip extra)
+        let project = (state.currentDetailProject && state.currentDetailProject.id === projectId)
+            ? state.currentDetailProject
+            : null;
+
+        if (!project) {
+            // Verifica cache antes de ir ao servidor
+            if (state._cachedProjectForActivities && state._cachedProjectForActivities.id === projectId) {
+                project = state._cachedProjectForActivities;
+            } else {
+                project = await api.getProjectById(projectId);
+                state._cachedProjectForActivities = project;
+            }
+        }
+
         if (!project) throw new Error('Projeto não encontrado.');
 
         state.currentActivitiesProjectId = projectId;
@@ -723,6 +762,7 @@ async function openProjectActivitiesModal(projectId) {
 function closeProjectActivitiesModal() {
     document.getElementById('activities-modal-overlay').classList.remove('active');
     state.currentActivitiesProjectId = null;
+    state._cachedProjectForActivities = null; // limpa cache ao fechar
 }
 
 function addActivityModalRow(desc = '', date = '', status = 'Pendente') {
@@ -778,8 +818,22 @@ async function saveProjectActivitiesModal() {
         return;
     }
 
+    const saveBtn = document.getElementById('btn-save-activities-modal');
+    const originalText = saveBtn ? saveBtn.textContent : '';
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Salvando...'; }
+
     try {
-        const project = await api.getProjectById(projectId);
+        // Usa cache do projeto para evitar round-trip extra ao servidor
+        let project = state._cachedProjectForActivities && state._cachedProjectForActivities.id === projectId
+            ? state._cachedProjectForActivities
+            : (state.currentDetailProject && state.currentDetailProject.id === projectId
+                ? state.currentDetailProject
+                : null);
+
+        if (!project) {
+            project = await api.getProjectById(projectId);
+        }
+
         const payload = {
             name: project.name,
             classification: project.classification,
@@ -802,9 +856,11 @@ async function saveProjectActivitiesModal() {
         if (state.currentDetailProject && state.currentDetailProject.id === projectId) {
             openProjectDetailsModal(projectId);
         }
-        loadDashboard();
+        scheduleDashboardReload();
     } catch (error) {
         Toast.show(error.message, 'error');
+    } finally {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = originalText; }
     }
 }
 
@@ -1140,7 +1196,7 @@ async function confirmDeleteProject(projectId, projectName) {
         try {
             await api.deleteProject(projectId);
             Toast.show('Projeto excluído com sucesso.', 'success');
-            loadDashboard();
+            scheduleDashboardReload();
         } catch (error) {
             Toast.show(error.message, 'error');
         }
@@ -1393,6 +1449,9 @@ function bindGlobalEvents() {
         }
 
         try {
+            const submitBtn = document.querySelector('#project-form button[type="submit"]');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Salvando...'; }
+
             if (state.editingProjectId) {
                 await api.updateProject(state.editingProjectId, projectPayload);
                 Toast.show('Projeto atualizado com sucesso!', 'success');
@@ -1401,9 +1460,12 @@ function bindGlobalEvents() {
                 Toast.show('Projeto cadastrado com sucesso!', 'success');
             }
             closeProjectModal();
-            loadDashboard();
+            scheduleDashboardReload();
         } catch (error) {
             Toast.show(error.message, 'error');
+        } finally {
+            const submitBtn = document.querySelector('#project-form button[type="submit"]');
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = state.editingProjectId ? 'Salvar Alterações' : 'Cadastrar Projeto'; }
         }
     });
 
@@ -1463,12 +1525,20 @@ function bindGlobalEvents() {
         loadDashboard();
     });
 
+    // 10. Ordenação de projetos (client-side — sem nova requisição ao servidor)
+    document.getElementById('sort-projects').addEventListener('change', (e) => {
+        state.sort = e.target.value;
+        renderProjectsGrid(); // apenas re-renderiza, sem chamar a API
+    });
+
     document.getElementById('btn-reset-filters').addEventListener('click', () => {
         state.filters = { classification: '', type: '', deadline_status: '', search: '' };
+        state.sort = 'end_date';
         document.getElementById('filter-search').value = '';
         document.getElementById('filter-classification').value = '';
         document.getElementById('filter-type').value = '';
         document.getElementById('filter-deadline').value = '';
+        document.getElementById('sort-projects').value = 'end_date';
         loadDashboard();
     });
 

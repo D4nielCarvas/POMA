@@ -4,7 +4,9 @@
 /* ==========================================================================
    RESET & BASE STYLES
    ========================================================================== */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -26,13 +28,16 @@ body {
     width: 8px;
     height: 8px;
 }
+
 ::-webkit-scrollbar-track {
     background: var(--color-bg-body);
 }
+
 ::-webkit-scrollbar-thumb {
     background: var(--color-border);
     border-radius: var(--radius-full);
 }
+
 ::-webkit-scrollbar-thumb:hover {
     background: var(--color-text-subtle);
 }
@@ -42,7 +47,10 @@ a {
     text-decoration: none;
 }
 
-button, input, select, textarea {
+button,
+input,
+select,
+textarea {
     font-family: inherit;
     font-size: inherit;
     color: inherit;
@@ -197,8 +205,15 @@ button, input, select, textarea {
 }
 
 @keyframes pulse-danger {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.15); }
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.15);
+    }
 }
 
 .notification-dropdown {
@@ -385,7 +400,9 @@ button, input, select, textarea {
     color: var(--color-danger);
 }
 
-.form-input, .form-select, .form-textarea {
+.form-input,
+.form-select,
+.form-textarea {
     width: 100%;
     padding: 0.65rem 0.9rem;
     background: var(--color-bg-input);
@@ -396,14 +413,17 @@ button, input, select, textarea {
     transition: all var(--transition-fast);
 }
 
-.form-input:focus, .form-select:focus, .form-textarea:focus {
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
     outline: none;
     border-color: var(--color-border-focus);
     box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.2);
     background: var(--color-bg-input-focus);
 }
 
-.form-input::placeholder, .form-textarea::placeholder {
+.form-input::placeholder,
+.form-textarea::placeholder {
     color: var(--color-text-subtle);
 }
 
@@ -500,10 +520,21 @@ button, input, select, textarea {
     gap: 0.25rem;
 }
 
-.auth-paam-step.step-p { color: var(--color-primary-600); }
-.auth-paam-step.step-a1 { color: var(--color-accent-amber); }
-.auth-paam-step.step-a2 { color: var(--color-accent-leaf); }
-.auth-paam-step.step-m { color: var(--color-primary-600); }
+.auth-paam-step.step-p {
+    color: var(--color-primary-600);
+}
+
+.auth-paam-step.step-a1 {
+    color: var(--color-accent-amber);
+}
+
+.auth-paam-step.step-a2 {
+    color: var(--color-accent-leaf);
+}
+
+.auth-paam-step.step-m {
+    color: var(--color-primary-600);
+}
 
 [data-theme="dark"] .auth-paam-step.step-p,
 [data-theme="dark"] .auth-paam-step.step-m {
@@ -568,7 +599,10 @@ button, input, select, textarea {
     text-underline-offset: 2px;
     transition: opacity 0.15s;
 }
-.link-btn:hover { opacity: 0.75; }
+
+.link-btn:hover {
+    opacity: 0.75;
+}
 
 /* Wrapper para input de senha + botão de visibilidade */
 .password-input-wrapper {
@@ -576,10 +610,12 @@ button, input, select, textarea {
     display: flex;
     align-items: center;
 }
+
 .password-input-wrapper .form-input {
     width: 100%;
     padding-right: 2.75rem;
 }
+
 .btn-toggle-password {
     position: absolute;
     right: 0.75rem;
@@ -592,7 +628,10 @@ button, input, select, textarea {
     align-items: center;
     transition: color 0.15s;
 }
-.btn-toggle-password:hover { color: var(--color-text-main); }
+
+.btn-toggle-password:hover {
+    color: var(--color-text-main);
+}
 
 /* Barra de força de senha */
 .password-strength {
@@ -601,6 +640,7 @@ button, input, select, textarea {
     align-items: center;
     gap: 0.75rem;
 }
+
 .strength-track {
     flex: 1;
     height: 4px;
@@ -608,12 +648,14 @@ button, input, select, textarea {
     border-radius: 9999px;
     overflow: hidden;
 }
+
 .strength-fill {
     height: 100%;
     width: 0%;
     border-radius: 9999px;
     transition: width 0.35s ease, background 0.35s ease;
 }
+
 .password-strength span {
     font-size: 0.78rem;
     color: var(--color-text-muted);
@@ -682,24 +724,29 @@ button, input, select, textarea {
     background: rgba(82, 183, 136, 0.12);
     border: 1px solid rgba(82, 183, 136, 0.25);
 }
+
 .metric-card.accent-active .metric-icon {
     color: var(--color-info);
     background: var(--color-info-bg);
     border: 1px solid var(--color-info-border);
 }
+
 .metric-card.accent-completed .metric-icon {
     color: var(--color-success);
     background: var(--color-success-bg);
     border: 1px solid var(--color-success-border);
 }
+
 .metric-card.accent-danger {
     border-color: rgba(248, 113, 113, 0.35);
 }
+
 .metric-card.accent-danger .metric-icon {
     color: var(--color-danger);
     background: var(--color-danger-bg);
     border: 1px solid var(--color-danger-border);
 }
+
 .metric-card.accent-danger .metric-value {
     color: var(--color-danger);
 }
@@ -823,12 +870,15 @@ button, input, select, textarea {
 .project-card.status-atrasado {
     border-left: 3px solid var(--color-danger);
 }
+
 .project-card.status-alerta {
     border-left: 3px solid var(--color-warning);
 }
+
 .project-card.status-no_prazo {
     border-left: 3px solid var(--color-primary-400);
 }
+
 .project-card.status-concluido {
     border-left: 3px solid var(--color-success);
 }
@@ -1157,7 +1207,7 @@ button, input, select, textarea {
     animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.modal-container > form {
+.modal-container>form {
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -1667,23 +1717,49 @@ button, input, select, textarea {
    KEYFRAME ANIMATIONS
    ========================================================================== */
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 @keyframes fadeInSlideDown {
-    from { opacity: 0; transform: translateY(-8px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 @keyframes scaleUp {
-    from { opacity: 0; transform: scale(0.96); }
-    to { opacity: 1; transform: scale(1); }
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 @keyframes slideInRight {
-    from { opacity: 0; transform: translateX(40px); }
-    to { opacity: 1; transform: translateX(0); }
+    from {
+        opacity: 0;
+        transform: translateX(40px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 /* ==========================================================================
@@ -1698,7 +1774,8 @@ button, input, select, textarea {
         padding: 1rem;
     }
 
-    .form-grid-2, .form-grid-3 {
+    .form-grid-2,
+    .form-grid-3 {
         grid-template-columns: 1fr;
     }
 
