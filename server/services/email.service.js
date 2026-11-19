@@ -24,7 +24,10 @@ function createTransporter() {
         host: SMTP_HOST,
         port: Number(process.env.SMTP_PORT) || 587,
         secure: process.env.SMTP_SECURE === 'true',
-        auth: { user: SMTP_USER, pass: SMTP_PASS }
+        auth: { user: SMTP_USER, pass: SMTP_PASS },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000
     });
 }
 
@@ -51,17 +54,27 @@ async function sendPasswordResetEmail(toEmail, toName, token) {
         return { preview: resetUrl };
     }
 
-    const html = buildResetEmailHtml(toName, resetUrl);
+    try {
+        const html = buildResetEmailHtml(toName, resetUrl);
 
-    const info = await transporter.sendMail({
-        from: `"${APP_NAME}" <${process.env.SMTP_USER}>`,
-        to: toEmail,
-        subject: `[${APP_NAME}] Redefinição de Senha`,
-        html
-    });
+        const info = await transporter.sendMail({
+            from: `"${APP_NAME}" <${process.env.SMTP_USER}>`,
+            to: toEmail,
+            subject: `[${APP_NAME}] Redefinição de Senha`,
+            html
+        });
 
-    console.log(`[Email Service] E-mail de redefinição enviado para ${toEmail}. MessageId: ${info.messageId}`);
-    return { messageId: info.messageId };
+        console.log(`[Email Service] E-mail de redefinição enviado para ${toEmail}. MessageId: ${info.messageId}`);
+        return { messageId: info.messageId };
+    } catch (err) {
+        console.error(`[Email Service Error] Falha ao enviar e-mail para ${toEmail}:`, err.message);
+        console.log('\n========================================================');
+        console.log('[Email Service Fallback] Link de recuperação gerado:');
+        console.log(`  Link: ${resetUrl}`);
+        console.log('========================================================\n');
+        // Não quebra a requisição do usuário com timeout/erro 500
+        return { error: err.message, preview: resetUrl };
+    }
 }
 
 function buildResetEmailHtml(name, resetUrl) {

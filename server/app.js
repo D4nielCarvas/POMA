@@ -11,12 +11,13 @@ const { apiLimiter } = require('./middleware/rate-limit.middleware');
 const app = express();
 
 // Hardening de Cabeçalhos HTTP com Helmet
-// Configurações personalizadas para permitir scripts/estilos locais e fontes
+// Configurações personalizadas para permitir scripts/estilos locais, Google Fonts e inline handlers
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrcAttr: ["'unsafe-inline'"], // Permite handlers como onclick/onsubmit dinâmicos
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "blob:"],
