@@ -360,9 +360,9 @@
                 </div>
             </div>
 
-            <!-- Barra de Filtros e Busca -->
+            <!-- Barra de Filtros e Ferramentas Responsiva -->
             <div class="toolbar">
-                <div class="toolbar-filters">
+                <div class="toolbar-row-main">
                     <div class="search-box">
                         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"
                             stroke-linejoin="round">
@@ -399,42 +399,46 @@
                         <option value="name_asc">A → Z (Título)</option>
                         <option value="name_desc">Z → A (Título)</option>
                     </select>
-
-                    <button class="btn btn-secondary btn-sm" id="btn-reset-filters" title="Limpar todos os filtros">
-                        Limpar
-                    </button>
-
-                    <!-- Exportação Analítica de Projetos -->
-                    <button class="btn btn-secondary btn-sm" id="btn-export-csv" title="Exportar dados filtrados para planilha (CSV / Excel)">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                        <span>Exportar CSV</span>
-                    </button>
                 </div>
 
-                <!-- Alternador de Visão (Grid / Kanban) -->
-                <div class="view-mode-toggle" style="display: flex; gap: 4px; align-items: center; margin-top: 0.75rem; border-top: 1px solid var(--color-border); padding-top: 0.75rem;">
-                    <span style="font-size: 0.8rem; color: var(--color-text-secondary); margin-right: 6px; font-weight: 500;">Visualização:</span>
-                    <button type="button" class="btn btn-sm btn-secondary active-view-btn" id="btn-view-grid" title="Visualização em Cards / Grade">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
-                            <rect x="3" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="14" width="7" height="7"></rect>
-                            <rect x="3" y="14" width="7" height="7"></rect>
-                        </svg>
-                        Grade
-                    </button>
-                    <button type="button" class="btn btn-sm btn-secondary" id="btn-view-kanban" title="Visualização em Quadro Kanban por Status">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
-                            <rect x="3" y="3" width="5" height="18" rx="1"></rect>
-                            <rect x="10" y="3" width="5" height="12" rx="1"></rect>
-                            <rect x="17" y="3" width="5" height="15" rx="1"></rect>
-                        </svg>
-                        Quadro Kanban
-                    </button>
+                <div class="toolbar-row-actions">
+                    <div class="toolbar-left-actions">
+                        <button class="btn btn-secondary btn-sm" id="btn-reset-filters" title="Limpar todos os filtros">
+                            Limpar
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="btn-export-csv" title="Exportar dados filtrados para planilha (CSV / Excel)">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            <span>Exportar CSV</span>
+                        </button>
+                    </div>
+
+                    <!-- Alternador de Visão (Grid / Kanban) alinhado harmonicamente -->
+                    <div class="view-mode-toggle">
+                        <span class="view-mode-label">Visualização:</span>
+                        <div class="btn-group-views">
+                            <button type="button" class="btn btn-sm btn-secondary active-view-btn" id="btn-view-grid" title="Visualização em Cards / Grade">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                    <rect x="3" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="14" width="7" height="7"></rect>
+                                    <rect x="3" y="14" width="7" height="7"></rect>
+                                </svg>
+                                <span>Grade</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" id="btn-view-kanban" title="Visualização em Quadro Kanban por Status">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                    <rect x="3" y="3" width="5" height="18" rx="1"></rect>
+                                    <rect x="10" y="3" width="5" height="12" rx="1"></rect>
+                                    <rect x="17" y="3" width="5" height="15" rx="1"></rect>
+                                </svg>
+                                <span>Quadro Kanban</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -446,6 +450,11 @@
             <!-- Quadro Kanban (Opcional) -->
             <div class="kanban-board" id="projects-kanban" style="display: none;">
                 <!-- Colunas Kanban inseridas via app.js -->
+            </div>
+
+            <!-- Paginação dos Projetos -->
+            <div class="pagination-wrapper" id="projects-pagination">
+                <!-- Inserido dinamicamente via app.js -->
             </div>
         </section>
     </main>

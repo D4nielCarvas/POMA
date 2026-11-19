@@ -16,6 +16,11 @@ const state = {
     },
     sort: 'end_date',          // 'end_date' | 'name_asc' | 'name_desc'
     currentView: 'grid',       // 'grid' | 'kanban'
+    pagination: {
+        page: 1,
+        pageSize: 6,
+        totalPages: 1
+    },
     editingProjectId: null,
     currentDetailProject: null,
     currentActivitiesProjectId: null,
@@ -266,7 +271,24 @@ function renderProjectsGrid() {
     }
     // 'end_date' mantém a ordem original do servidor (já ordenado por end_date ASC)
 
-    grid.innerHTML = sorted.map(project => {
+    // Paginação Client-Side para o Modo Grade
+    const totalItems = sorted.length;
+    const pageSize = state.pagination.pageSize;
+    state.pagination.totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    
+    // Garante que a página atual esteja dentro dos limites válidos
+    if (state.pagination.page > state.pagination.totalPages) {
+        state.pagination.page = state.pagination.totalPages;
+    }
+    if (state.pagination.page < 1) {
+        state.pagination.page = 1;
+    }
+
+    const startIndex = (state.pagination.page - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, totalItems);
+    const paginatedProjects = sorted.slice(startIndex, endIndex);
+
+    grid.innerHTML = paginatedProjects.map(project => {
         const deadline = project.deadline_info || {};
         const activities = project.activities_summary || { total: 0, completed: 0 };
         const percentCompleted = activities.total > 0 
@@ -370,8 +392,66 @@ function renderProjectsGrid() {
         `;
     }).join('');
 
+    // Renderiza a barra de paginação do modo grade
+    renderPaginationControls(totalItems, startIndex + 1, endIndex);
+
     // Também atualiza o Kanban para sincronização
     renderKanbanBoard(sorted);
+}
+
+// ==========================================================================
+// RENDERIZAÇÃO DOS CONTROLES DE PAGINAÇÃO
+// ==========================================================================
+function renderPaginationControls(totalItems, itemStart, itemEnd) {
+    const container = document.getElementById('projects-pagination');
+    if (!container) return;
+
+    // Se estiver no modo Kanban ou sem projetos, oculta paginação
+    if (state.currentView === 'kanban' || totalItems === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'flex';
+    const { page, totalPages, pageSize } = state.pagination;
+
+    // Constrói botões numéricos
+    let pageButtonsHtml = '';
+    for (let i = 1; i <= totalPages; i++) {
+        // Mostra a primeira, a última, e páginas próximas à atual
+        if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
+            pageButtonsHtml += `
+                <button type="button" class="pagination-btn ${i === page ? 'active' : ''}" onclick="goToPage(${i})">
+                    ${i}
+                </button>
+            `;
+        } else if (i === page - 2 || i === page + 2) {
+            pageButtonsHtml += `<span style="color: var(--color-text-secondary); padding: 0 4px;">...</span>`;
+        }
+    }
+
+    container.innerHTML = `
+        <div class="pagination-info">
+            Exibindo <strong>${totalItems > 0 ? itemStart : 0}–${itemEnd}</strong> de <strong>${totalItems}</strong> projetos
+        </div>
+        <div class="pagination-controls">
+            <button type="button" class="pagination-btn" onclick="goToPage(${page - 1})" ${page <= 1 ? 'disabled' : ''} title="Página Anterior">
+                ‹
+            </button>
+            ${pageButtonsHtml}
+            <button type="button" class="pagination-btn" onclick="goToPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''} title="Próxima Página">
+                ›
+            </button>
+        </div>
+    `;
+}
+
+function goToPage(newPage) {
+    if (newPage < 1 || newPage > state.pagination.totalPages || newPage === state.pagination.page) return;
+    state.pagination.page = newPage;
+    renderProjectsGrid();
+    // Suave scroll para o topo da lista de projetos
+    document.getElementById('projects-grid')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ==========================================================================
@@ -1749,6 +1829,8 @@ function bindGlobalEvents() {
             btnKanban.classList.remove('active-view-btn');
             gridContainer.style.display = 'grid';
             kanbanContainer.style.display = 'none';
+            const paginationEl = document.getElementById('projects-pagination');
+            if (paginationEl && state.projects.length > 0) paginationEl.style.display = 'flex';
         });
 
         btnKanban.addEventListener('click', () => {
@@ -1757,6 +1839,8 @@ function bindGlobalEvents() {
             btnGrid.classList.remove('active-view-btn');
             gridContainer.style.display = 'none';
             kanbanContainer.style.display = 'grid';
+            const paginationEl = document.getElementById('projects-pagination');
+            if (paginationEl) paginationEl.style.display = 'none';
             renderKanbanBoard();
         });
     }
