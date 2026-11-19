@@ -27,18 +27,53 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 
-// Configuração granular e segura de CORS
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+// Configuração resiliente de CORS
+const rawAllowed = process.env.ALLOWED_ORIGINS || process.env.APP_URL || '';
+const configuredOrigins = rawAllowed
+    .split(',')
+    .map(o => o.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Permite requisições sem origin (ex: chamadas no mesmo host, healthchecks locais)
-        if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+        // 1. Requisições sem header 'Origin' (ex: chamadas server-to-server, curl, health check, mobile)
+        if (!origin) {
             return callback(null, true);
         }
-        return callback(new Error('Acesso bloqueado pela política de CORS.'));
+
+        const normalizedOrigin = origin.trim().replace(/\/+$/, '');
+
+        // 2. Sempre aceita localhost / 127.0.0.1 em qualquer porta para desenvolvimento local
+        const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalizedOrigin);
+        if (isLocalhost) {
+            return callback(null, true);
+        }
+
+        // 3. Se for o mesmo domínio da URL da aplicação em produção (Render, Vercel, domínio próprio)
+        if (process.env.APP_URL) {
+            const normalizedAppUrl = process.env.APP_URL.trim().replace(/\/+$/, '');
+            if (normalizedOrigin === normalizedAppUrl) {
+                return callback(null, true);
+            }
+        }
+
+        // 4. Se estiver explicitamente listado em ALLOWED_ORIGINS
+        if (configuredOrigins.includes(normalizedOrigin)) {
+            return callback(null, true);
+        }
+
+        // 5. Permite automaticamente origens *.onrender.com caso o app esteja no Render
+        if (/\.onrender\.com$/i.test(new URL(origin).hostname)) {
+            return callback(null, true);
+        }
+
+        // 6. Em ambiente que não seja produção estrita, permite por padrão
+        if (process.env.NODE_ENV !== 'production') {
+            return callback(null, true);
+        }
+
+        // Caso contrário, recusa graciosamente com false (não com Error, para responder 204/CORS limpo)
+        return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
