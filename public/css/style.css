@@ -2134,7 +2134,7 @@ textarea {
 
 .calendar-weekdays-header {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: 58px repeat(7, minmax(0, 1fr));
     border-bottom: 1px solid var(--color-border);
     background: var(--color-bg-body);
 }
@@ -2149,14 +2149,84 @@ textarea {
     text-transform: uppercase;
 }
 
+.weekday-col.week-header-col {
+    color: var(--color-primary-500);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-bg-surface-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .calendar-days-grid {
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: 58px repeat(7, minmax(0, 1fr));
     border-left: 1px solid var(--color-border);
     border-top: 1px solid var(--color-border);
     background: var(--color-border);
     gap: 1px;
     width: 100%;
+}
+
+/* Coluna Lateral de Semanas do Ano */
+.calendar-week-cell {
+    background: var(--color-bg-body);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.4rem 0.2rem;
+    user-select: none;
+    border-right: 1px solid var(--color-border);
+    transition: background-color var(--transition-fast);
+}
+
+.calendar-week-cell:hover {
+    background: var(--color-bg-surface-elevated);
+}
+
+.week-pill-tag {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 6px 3px;
+    width: 100%;
+    max-width: 48px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: all var(--transition-fast);
+}
+
+.calendar-week-cell:hover .week-pill-tag {
+    border-color: var(--color-primary-500);
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.week-pill-num {
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--color-text-main);
+}
+
+.calendar-week-cell:hover .week-pill-num {
+    color: var(--color-primary-500);
+}
+
+.week-pill-label {
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-text-secondary);
+    line-height: 1;
+    margin-top: 2px;
 }
 
 .calendar-day-cell {
@@ -2367,6 +2437,25 @@ textarea {
 }
 
 @media (max-width: 900px) {
+    .calendar-weekdays-header {
+        grid-template-columns: 42px repeat(7, minmax(0, 1fr));
+    }
+    .calendar-days-grid {
+        grid-template-columns: 42px repeat(7, minmax(0, 1fr));
+    }
+    .calendar-week-cell {
+        padding: 0.2rem 0.1rem;
+    }
+    .week-pill-tag {
+        max-width: 36px;
+        padding: 4px 1px;
+    }
+    .week-pill-num {
+        font-size: 0.72rem;
+    }
+    .week-pill-label {
+        display: none;
+    }
     .calendar-day-cell {
         min-height: 85px;
     }

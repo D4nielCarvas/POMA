@@ -753,33 +753,26 @@ function renderCalendarView(projectsList = state.projects) {
     const monthAbbr = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
 
     for (let i = 0; i < totalCells; i++) {
-        let cellYear = year;
-        let cellMonth = month;
-        let dayNum = 0;
-        let isOtherMonth = false;
+        // No início de cada linha de 7 dias, renderiza a coluna indicadora da semana do ano
+        if (i % 7 === 0) {
+            const thursdayInfo = getCalendarCellDate(year, month, i + 4, firstDayOfMonth, daysInCurrentMonth, daysInPrevMonth);
+            const weekOfYear = getISOWeekNumber(thursdayInfo.date);
 
-        if (i < firstDayOfMonth) {
-            // Dias do mês anterior
-            isOtherMonth = true;
-            dayNum = daysInPrevMonth - (firstDayOfMonth - 1 - i);
-            cellMonth = month - 1;
-            if (cellMonth < 0) {
-                cellMonth = 11;
-                cellYear = year - 1;
-            }
-        } else if (i >= firstDayOfMonth + daysInCurrentMonth) {
-            // Dias do próximo mês
-            isOtherMonth = true;
-            dayNum = i - (firstDayOfMonth + daysInCurrentMonth) + 1;
-            cellMonth = month + 1;
-            if (cellMonth > 11) {
-                cellMonth = 0;
-                cellYear = year + 1;
-            }
-        } else {
-            // Dias do mês corrente
-            dayNum = i - firstDayOfMonth + 1;
+            daysHtml += `
+                <div class="calendar-week-cell" title="${weekOfYear}ª semana do ano">
+                    <div class="week-pill-tag">
+                        <span class="week-pill-num">${weekOfYear}ª</span>
+                        <span class="week-pill-label">sem.</span>
+                    </div>
+                </div>
+            `;
         }
+
+        const cellInfo = getCalendarCellDate(year, month, i, firstDayOfMonth, daysInCurrentMonth, daysInPrevMonth);
+        const cellYear = cellInfo.year;
+        const cellMonth = cellInfo.month;
+        const dayNum = cellInfo.day;
+        const isOtherMonth = i < firstDayOfMonth || i >= (firstDayOfMonth + daysInCurrentMonth);
 
         const dateKey = `${cellYear}-${pad(cellMonth + 1)}-${pad(dayNum)}`;
         const isToday = dateKey === todayStr;
@@ -837,6 +830,56 @@ function renderCalendarView(projectsList = state.projects) {
 
     daysContainer.innerHTML = daysHtml;
     bindCalendarEventsAndDragDrop();
+}
+
+/**
+ * Calcula a data civil correspondente a qualquer índice (0 a 41) da grade do calendário
+ */
+function getCalendarCellDate(year, month, index, firstDayOfMonth, daysInCurrentMonth, daysInPrevMonth) {
+    let cellYear = year;
+    let cellMonth = month;
+    let dayNum = 0;
+
+    if (index < firstDayOfMonth) {
+        dayNum = daysInPrevMonth - (firstDayOfMonth - 1 - index);
+        cellMonth = month - 1;
+        if (cellMonth < 0) {
+            cellMonth = 11;
+            cellYear = year - 1;
+        }
+    } else if (index >= firstDayOfMonth + daysInCurrentMonth) {
+        dayNum = index - (firstDayOfMonth + daysInCurrentMonth) + 1;
+        cellMonth = month + 1;
+        if (cellMonth > 11) {
+            cellMonth = 0;
+            cellYear = year + 1;
+        }
+    } else {
+        dayNum = index - firstDayOfMonth + 1;
+    }
+
+    return {
+        year: cellYear,
+        month: cellMonth,
+        day: dayNum,
+        date: new Date(cellYear, cellMonth, dayNum)
+    };
+}
+
+/**
+ * Retorna o número da semana do ano segundo a norma internacional ISO-8601.
+ * A semana que contém a primeira quinta-feira do ano é considerada a Semana 1.
+ */
+function getISOWeekNumber(date) {
+    const target = new Date(date.valueOf());
+    const dayNr = (date.getDay() + 6) % 7; // Segunda = 0, Domingo = 6
+    target.setDate(target.getDate() - dayNr + 3); // Quinta-feira mais próxima
+    const firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) {
+        target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    }
+    return 1 + Math.ceil((firstThursday - target) / 604800000);
 }
 
 // Interceptadores de clique em eventos do calendário para não propagar ao clique no dia
