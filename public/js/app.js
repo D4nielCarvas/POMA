@@ -15,7 +15,8 @@ const state = {
         search: ''
     },
     sort: 'end_date',          // 'end_date' | 'name_asc' | 'name_desc'
-    currentView: 'grid',       // 'grid' | 'kanban'
+    currentView: 'grid',       // 'grid' | 'kanban' | 'calendar'
+    calendarDate: new Date(),  // Data do mês atualmente focado no calendário
     pagination: {
         page: 1,
         pageSize: 6,
@@ -395,8 +396,9 @@ function renderProjectsGrid() {
     // Renderiza a barra de paginação do modo grade
     renderPaginationControls(totalItems, startIndex + 1, endIndex);
 
-    // Também atualiza o Kanban para sincronização
+    // Também atualiza o Kanban e Calendário para sincronização
     renderKanbanBoard(sorted);
+    renderCalendarView(sorted);
 }
 
 // ==========================================================================
@@ -653,6 +655,196 @@ function exportProjectsToCSV() {
     URL.revokeObjectURL(url);
 
     Toast.show('Relatório analítico exportado em CSV com sucesso!', 'success');
+}
+
+// ==========================================================================
+// RENDERIZAÇÃO DO CALENDÁRIO MENSAL (GOOGLE CALENDAR STYLE)
+// ==========================================================================
+function renderCalendarView(projectsList = state.projects) {
+    const calendarContainer = document.getElementById('projects-calendar');
+    const daysContainer = document.getElementById('calendar-days-cells');
+    const monthLabel = document.getElementById('calendar-current-month-label');
+    if (!calendarContainer || !daysContainer || !monthLabel) return;
+
+    const focusedDate = state.calendarDate instanceof Date ? state.calendarDate : new Date();
+    const year = focusedDate.getFullYear();
+    const month = focusedDate.getMonth(); // 0-indexed (0 = Jan, 10 = Nov)
+
+    // Formata o título: "Novembro de 2026"
+    const monthName = focusedDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    monthLabel.textContent = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+
+    // Mapeamento de todas as etapas e datas limite de projetos por data (YYYY-MM-DD)
+    const eventsByDate = new Map();
+
+    const addEventToDate = (dateKey, eventObj) => {
+        if (!dateKey) return;
+        const normalizedKey = dateKey.split('T')[0];
+        if (!eventsByDate.has(normalizedKey)) {
+            eventsByDate.set(normalizedKey, []);
+        }
+        eventsByDate.get(normalizedKey).push(eventObj);
+    };
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    projectsList.forEach(project => {
+        // 1. Etapas do cronograma
+        if (Array.isArray(project.activities)) {
+            project.activities.forEach(act => {
+                const actDate = act.target_date || act.targetDate;
+                if (!actDate) return;
+
+                let statusClass = 'status-pendente';
+                const actStatus = act.status || 'Pendente';
+                if (actStatus === 'Concluída') {
+                    statusClass = 'status-concluida';
+                } else if (actStatus === 'Em Andamento') {
+                    statusClass = 'status-andamento';
+                } else if (actDate < todayStr && actStatus !== 'Concluída') {
+                    statusClass = 'status-atrasada';
+                }
+
+                addEventToDate(actDate, {
+                    type: 'activity',
+                    title: act.description,
+                    projectName: project.name,
+                    projectId: project.id,
+                    status: actStatus,
+                    statusClass: statusClass,
+                    date: actDate
+                });
+            });
+        }
+
+        // 2. Data de término do projeto como marco importante
+        if (project.end_date) {
+            const isCompleted = project.status === 'Concluído';
+            const isOverdue = project.end_date < todayStr && !isCompleted;
+            let statusClass = isCompleted ? 'status-concluida' : (isOverdue ? 'status-atrasada' : 'status-andamento');
+
+            addEventToDate(project.end_date, {
+                type: 'project_end',
+                title: `Fim: ${project.name}`,
+                projectName: project.name,
+                projectId: project.id,
+                status: project.status,
+                statusClass: statusClass,
+                date: project.end_date
+            });
+        }
+    });
+
+    // Construção das células do calendário (dias da semana iniciam em Domingo: 0 a 6)
+    const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 = Dom, 1 = Seg, ...
+    const daysInCurrentMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+    // 6 semanas x 7 dias = 42 células para grade perfeita e estável
+    const totalCells = 42;
+    let daysHtml = '';
+
+    const pad = (n) => String(n).padStart(2, '0');
+
+    // Abreviações dos meses para o primeiro dia de cada mês (ex: "1 nov.", "1 dez.")
+    const monthAbbr = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
+
+    for (let i = 0; i < totalCells; i++) {
+        let cellYear = year;
+        let cellMonth = month;
+        let dayNum = 0;
+        let isOtherMonth = false;
+
+        if (i < firstDayOfMonth) {
+            // Dias do mês anterior
+            isOtherMonth = true;
+            dayNum = daysInPrevMonth - (firstDayOfMonth - 1 - i);
+            cellMonth = month - 1;
+            if (cellMonth < 0) {
+                cellMonth = 11;
+                cellYear = year - 1;
+            }
+        } else if (i >= firstDayOfMonth + daysInCurrentMonth) {
+            // Dias do próximo mês
+            isOtherMonth = true;
+            dayNum = i - (firstDayOfMonth + daysInCurrentMonth) + 1;
+            cellMonth = month + 1;
+            if (cellMonth > 11) {
+                cellMonth = 0;
+                cellYear = year + 1;
+            }
+        } else {
+            // Dias do mês corrente
+            dayNum = i - firstDayOfMonth + 1;
+        }
+
+        const dateKey = `${cellYear}-${pad(cellMonth + 1)}-${pad(dayNum)}`;
+        const isToday = dateKey === todayStr;
+        const cellEvents = eventsByDate.get(dateKey) || [];
+
+        // Rótulo especial quando for dia 1 de qualquer mês (ex: "1 nov.")
+        const dayLabelSub = dayNum === 1 ? `<span class="day-month-sub">${monthAbbr[cellMonth]}</span>` : '';
+
+        // Limita exibição inicial a 3 eventos para não estourar a célula
+        const maxVisible = 3;
+        const visibleEvents = cellEvents.slice(0, maxVisible);
+        const remainingCount = cellEvents.length - maxVisible;
+
+        const eventsHtml = visibleEvents.map(ev => `
+            <div class="cal-event-pill ${ev.statusClass}" onclick="openProjectDetailsModal(${ev.projectId})" title="[${escapeHtml(ev.projectName)}] ${escapeHtml(ev.title)} (${ev.status})">
+                <span class="cal-event-project-dot"></span>
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ev.title)}</span>
+            </div>
+        `).join('');
+
+        const moreBtnHtml = remainingCount > 0 
+            ? `<button type="button" class="cal-more-events-btn" onclick="openCalendarDayEventsModal('${dateKey}')">+ mais ${remainingCount}</button>` 
+            : '';
+
+        daysHtml += `
+            <div class="calendar-day-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''}" data-date="${dateKey}">
+                <div class="calendar-day-header">
+                    <span class="day-number">${dayNum}</span>
+                    ${dayLabelSub}
+                </div>
+                <div class="calendar-events-list">
+                    ${eventsHtml}
+                    ${moreBtnHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    daysContainer.innerHTML = daysHtml;
+}
+
+// Navegação de Meses
+function navigateCalendar(offsetMonths) {
+    const cur = state.calendarDate instanceof Date ? state.calendarDate : new Date();
+    state.calendarDate = new Date(cur.getFullYear(), cur.getMonth() + offsetMonths, 1);
+    renderCalendarView();
+}
+
+function resetCalendarToToday() {
+    state.calendarDate = new Date();
+    renderCalendarView();
+}
+
+// Modal ou visualização de detalhes ao clicar em "+ mais X" em um dia
+function openCalendarDayEventsModal(dateKey) {
+    const dayProjects = [];
+    state.projects.forEach(p => {
+        const matchesActivity = (p.activities || []).some(a => (a.target_date || a.targetDate) === dateKey);
+        const matchesEnd = p.end_date === dateKey;
+        if (matchesActivity || matchesEnd) {
+            dayProjects.push(p);
+        }
+    });
+
+    if (dayProjects.length > 0) {
+        // Abre os detalhes do primeiro projeto associado àquele dia
+        openProjectDetailsModal(dayProjects[0].id);
+    }
 }
 
 // ==========================================================================
@@ -1816,19 +2008,23 @@ function bindGlobalEvents() {
         renderProjectsGrid(); // apenas re-renderiza, sem chamar a API
     });
 
-    // 11. Alternância de Modo de Visualização (Grade / Kanban)
+    // 11. Alternância de Modo de Visualização (Grade / Kanban / Calendário)
     const btnGrid = document.getElementById('btn-view-grid');
     const btnKanban = document.getElementById('btn-view-kanban');
+    const btnCalendar = document.getElementById('btn-view-calendar');
     const gridContainer = document.getElementById('projects-grid');
     const kanbanContainer = document.getElementById('projects-kanban');
+    const calendarContainer = document.getElementById('projects-calendar');
 
     if (btnGrid && btnKanban) {
         btnGrid.addEventListener('click', () => {
             state.currentView = 'grid';
             btnGrid.classList.add('active-view-btn');
             btnKanban.classList.remove('active-view-btn');
+            if (btnCalendar) btnCalendar.classList.remove('active-view-btn');
             gridContainer.style.display = 'grid';
             kanbanContainer.style.display = 'none';
+            if (calendarContainer) calendarContainer.style.display = 'none';
             const paginationEl = document.getElementById('projects-pagination');
             if (paginationEl && state.projects.length > 0) paginationEl.style.display = 'flex';
         });
@@ -1837,13 +2033,38 @@ function bindGlobalEvents() {
             state.currentView = 'kanban';
             btnKanban.classList.add('active-view-btn');
             btnGrid.classList.remove('active-view-btn');
+            if (btnCalendar) btnCalendar.classList.remove('active-view-btn');
             gridContainer.style.display = 'none';
             kanbanContainer.style.display = 'grid';
+            if (calendarContainer) calendarContainer.style.display = 'none';
             const paginationEl = document.getElementById('projects-pagination');
             if (paginationEl) paginationEl.style.display = 'none';
             renderKanbanBoard();
         });
+
+        if (btnCalendar) {
+            btnCalendar.addEventListener('click', () => {
+                state.currentView = 'calendar';
+                btnCalendar.classList.add('active-view-btn');
+                btnGrid.classList.remove('active-view-btn');
+                btnKanban.classList.remove('active-view-btn');
+                gridContainer.style.display = 'none';
+                kanbanContainer.style.display = 'none';
+                if (calendarContainer) calendarContainer.style.display = 'flex';
+                const paginationEl = document.getElementById('projects-pagination');
+                if (paginationEl) paginationEl.style.display = 'none';
+                renderCalendarView();
+            });
+        }
     }
+
+    // Controles de Navegação do Calendário
+    const btnCalPrev = document.getElementById('btn-calendar-prev');
+    const btnCalNext = document.getElementById('btn-calendar-next');
+    const btnCalToday = document.getElementById('btn-calendar-today');
+    if (btnCalPrev) btnCalPrev.addEventListener('click', () => navigateCalendar(-1));
+    if (btnCalNext) btnCalNext.addEventListener('click', () => navigateCalendar(1));
+    if (btnCalToday) btnCalToday.addEventListener('click', () => resetCalendarToToday());
 
     // 12. Exportação de Relatório Analítico em Planilha CSV
     const btnExportCsv = document.getElementById('btn-export-csv');

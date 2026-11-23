@@ -2033,3 +2033,263 @@ textarea {
     color: #ffffff !important;
     border-color: var(--color-primary-500) !important;
 }
+
+/* ==========================================================================
+   CALENDÁRIO MENSAL ESTILO GOOGLE CALENDAR
+   ========================================================================== */
+.calendar-view-container {
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    margin-bottom: 2rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.calendar-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-surface-elevated);
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.calendar-nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.calendar-nav-arrows {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.btn-icon-subtle {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    color: var(--color-text-main);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-icon-subtle:hover {
+    background: var(--color-bg-surface-elevated);
+    border-color: var(--color-primary-500);
+    color: var(--color-primary-500);
+}
+
+.calendar-month-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    letter-spacing: -0.02em;
+    min-width: 220px;
+}
+
+.calendar-legend {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    font-size: 0.78rem;
+    color: var(--color-text-secondary);
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 500;
+}
+
+.legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: var(--radius-full);
+}
+
+.legend-dot.status-concluida { background: #10b981; }
+.legend-dot.status-andamento { background: #3b82f6; }
+.legend-dot.status-pendente  { background: #f59e0b; }
+.legend-dot.status-atrasada  { background: #ef4444; }
+
+.calendar-month-grid {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.calendar-weekdays-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-body);
+}
+
+.weekday-col {
+    padding: 0.75rem 0.5rem;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.calendar-days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-left: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
+    background: var(--color-border);
+    gap: 1px;
+}
+
+.calendar-day-cell {
+    background: var(--color-bg-surface);
+    min-height: 115px;
+    padding: 0.4rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    position: relative;
+    transition: background 0.15s ease;
+}
+
+.calendar-day-cell.other-month {
+    background: var(--color-bg-body);
+    opacity: 0.65;
+}
+
+.calendar-day-cell.is-today {
+    background: rgba(16, 185, 129, 0.04);
+}
+
+.calendar-day-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 0.2rem;
+}
+
+.day-number {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-full);
+}
+
+.calendar-day-cell.is-today .day-number {
+    background: #1d4ed8;
+    color: #ffffff;
+    font-weight: 700;
+    box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.25);
+}
+
+.day-month-sub {
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+    margin-left: 0.25rem;
+}
+
+.calendar-events-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.22rem;
+    overflow-y: auto;
+    max-height: 120px;
+}
+
+/* Event Pill (estilo badge arredondada do Google Calendar) */
+.cal-event-pill {
+    font-size: 0.72rem;
+    line-height: 1.25;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    color: #ffffff;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: transform 0.1s ease, filter 0.1s ease;
+}
+
+.cal-event-pill:hover {
+    filter: brightness(1.12);
+    transform: scale(1.02);
+}
+
+.cal-event-pill.status-concluida {
+    background: #059669;
+}
+
+.cal-event-pill.status-andamento {
+    background: #2563eb;
+}
+
+.cal-event-pill.status-pendente {
+    background: #d97706;
+}
+
+.cal-event-pill.status-atrasada {
+    background: #dc2626;
+}
+
+.cal-event-project-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.85);
+    flex-shrink: 0;
+}
+
+.cal-more-events-btn {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    padding: 1px 2px;
+}
+
+.cal-more-events-btn:hover {
+    color: var(--color-primary-500);
+    text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+    .calendar-day-cell {
+        min-height: 85px;
+    }
+    .calendar-header-bar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .calendar-month-title {
+        font-size: 1.1rem;
+    }
+}

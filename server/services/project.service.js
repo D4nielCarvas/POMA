@@ -79,6 +79,7 @@ class ProjectService {
             const enriched = AlertService.enrichProjectWithAlerts(project, activities);
             return {
                 ...enriched,
+                activities, // Exponibiliza a lista de etapas para renderização do calendário
                 is_owner: isOwner,
                 can_edit: isOwner,
                 can_delete: isOwner,
