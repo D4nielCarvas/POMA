@@ -790,12 +790,18 @@ function renderCalendarView(projectsList = state.projects) {
         const visibleEvents = cellEvents.slice(0, maxVisible);
         const remainingCount = cellEvents.length - maxVisible;
 
-        const eventsHtml = visibleEvents.map(ev => `
-            <div class="cal-event-pill ${ev.statusClass}" onclick="openProjectDetailsModal(${ev.projectId})" title="[${escapeHtml(ev.projectName)}] ${escapeHtml(ev.title)} (${ev.status})">
-                <span class="cal-event-project-dot"></span>
-                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ev.title)}</span>
-            </div>
-        `).join('');
+        const eventsHtml = visibleEvents.map(ev => {
+            // Limita o texto exibido a no máximo 26 caracteres para manter leitura limpa dentro da célula do dia
+            const rawTitle = ev.title || '';
+            const displayTitle = rawTitle.length > 26 ? rawTitle.substring(0, 24) + '...' : rawTitle;
+
+            return `
+                <div class="cal-event-pill ${ev.statusClass}" onclick="openProjectDetailsModal(${ev.projectId})" title="[${escapeHtml(ev.projectName)}] ${escapeHtml(ev.title)} (${ev.status})">
+                    <span class="cal-event-project-dot"></span>
+                    <span class="cal-event-title-text">${escapeHtml(displayTitle)}</span>
+                </div>
+            `;
+        }).join('');
 
         const moreBtnHtml = remainingCount > 0 
             ? `<button type="button" class="cal-more-events-btn" onclick="openCalendarDayEventsModal('${dateKey}')">+ mais ${remainingCount}</button>` 
