@@ -883,6 +883,87 @@
         </div>
     </div>
 
+    <!-- ====================================================================
+         MODAL: CRIAÇÃO RÁPIDA NO CALENDÁRIO (PROJETO OU ATIVIDADE)
+         ==================================================================== -->
+    <div class="modal-overlay" id="modal-calendar-quick-add" style="display: none;">
+        <div class="modal-card" style="max-width: 520px;">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <span class="modal-badge-id" id="quick-add-badge-date">Data</span>
+                    <h2 id="quick-add-modal-title">Novo Registro</h2>
+                </div>
+                <button class="btn-icon" id="btn-close-quick-add-modal" aria-label="Fechar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Opção 1: Criar Novo Projeto Completo pré-preenchido nesta data -->
+                <div class="quick-add-option-card" id="quick-add-create-project-card">
+                    <div class="quick-add-option-icon">📁</div>
+                    <div class="quick-add-option-content">
+                        <h4>Criar Novo Projeto</h4>
+                        <p>Cadastre um projeto com responsáveis, metas e cronograma iniciando nesta data.</p>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-quick-new-project">
+                        Criar Projeto
+                    </button>
+                </div>
+
+                <div class="form-section-title" style="margin-top: 1.25rem; margin-bottom: 0.75rem;">
+                    <span>Ou Adicionar Nova Etapa / Atividade</span>
+                </div>
+
+                <!-- Opção 2: Formulário de Adicionar Etapa em Projeto Existente -->
+                <form id="form-quick-add-activity">
+                    <input type="hidden" id="quick-act-date">
+
+                    <div class="form-group" style="margin-bottom: 0.85rem;">
+                        <label for="quick-act-project-select" class="form-label">Projeto de Destino *</label>
+                        <select id="quick-act-project-select" class="form-select" required>
+                            <option value="">Selecione o projeto...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0.85rem;">
+                        <label for="quick-act-desc" class="form-label">Descrição da Etapa / Atividade *</label>
+                        <input type="text" id="quick-act-desc" class="form-input" placeholder="Ex: Calibração de dosadores, Aplicação foliar..." required>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="quick-act-status" class="form-label">Status Inicial</label>
+                            <select id="quick-act-status" class="form-select">
+                                <option value="Pendente">Pendente</option>
+                                <option value="Em Andamento">Em Andamento</option>
+                                <option value="Concluída">Concluída</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="quick-act-display-date" class="form-label">Data Prevista *</label>
+                            <input type="date" id="quick-act-display-date" class="form-input" required>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;">
+                        <button type="button" class="btn btn-secondary" id="btn-cancel-quick-add">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" id="btn-submit-quick-act">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            <span>Adicionar Etapa</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts da Aplicação -->
     <script src="js/api.js"></script>
     <script src="js/components/toast.js"></script>

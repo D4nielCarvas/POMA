@@ -707,12 +707,14 @@ function renderCalendarView(projectsList = state.projects) {
 
                 addEventToDate(actDate, {
                     type: 'activity',
+                    activityId: act.id,
                     title: act.description,
                     projectName: project.name,
                     projectId: project.id,
                     status: actStatus,
                     statusClass: statusClass,
-                    date: actDate
+                    date: actDate,
+                    canEdit: project.can_edit !== false
                 });
             });
         }
@@ -730,7 +732,8 @@ function renderCalendarView(projectsList = state.projects) {
                 projectId: project.id,
                 status: project.status,
                 statusClass: statusClass,
-                date: project.end_date
+                date: project.end_date,
+                canEdit: false
             });
         }
     });
@@ -794,9 +797,20 @@ function renderCalendarView(projectsList = state.projects) {
             // Limita o texto exibido a no máximo 26 caracteres para manter leitura limpa dentro da célula do dia
             const rawTitle = ev.title || '';
             const displayTitle = rawTitle.length > 26 ? rawTitle.substring(0, 24) + '...' : rawTitle;
+            const isActivity = ev.type === 'activity';
+            const isDraggable = isActivity && ev.canEdit !== false;
 
             return `
-                <div class="cal-event-pill ${ev.statusClass}" onclick="openProjectDetailsModal(${ev.projectId})" title="[${escapeHtml(ev.projectName)}] ${escapeHtml(ev.title)} (${ev.status})">
+                <div class="cal-event-pill ${ev.statusClass} ${isDraggable ? 'draggable-cal-event' : ''}" 
+                     draggable="${isDraggable ? 'true' : 'false'}"
+                     data-event-type="${ev.type}"
+                     data-project-id="${ev.projectId}"
+                     data-activity-id="${ev.activityId || ''}"
+                     data-activity-desc="${encodeURIComponent(ev.title || '')}"
+                     data-activity-date="${ev.date}"
+                     data-activity-status="${ev.status}"
+                     onclick="handleCalendarEventClick(event, ${ev.projectId})" 
+                     title="[${escapeHtml(ev.projectName)}] ${escapeHtml(ev.title)} (${ev.status})${isDraggable ? ' - Arraste para mover de dia' : ''}">
                     <span class="cal-event-project-dot"></span>
                     <span class="cal-event-title-text">${escapeHtml(displayTitle)}</span>
                 </div>
@@ -804,11 +818,11 @@ function renderCalendarView(projectsList = state.projects) {
         }).join('');
 
         const moreBtnHtml = remainingCount > 0 
-            ? `<button type="button" class="cal-more-events-btn" onclick="openCalendarDayEventsModal('${dateKey}')">+ mais ${remainingCount}</button>` 
+            ? `<button type="button" class="cal-more-events-btn" onclick="handleCalendarMoreBtnClick(event, '${dateKey}')">+ mais ${remainingCount}</button>` 
             : '';
 
         daysHtml += `
-            <div class="calendar-day-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''}" data-date="${dateKey}">
+            <div class="calendar-day-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''}" data-date="${dateKey}" title="Clique no dia para cadastrar projeto ou etapa">
                 <div class="calendar-day-header">
                     <span class="day-number">${dayNum}</span>
                     ${dayLabelSub}
@@ -822,6 +836,18 @@ function renderCalendarView(projectsList = state.projects) {
     }
 
     daysContainer.innerHTML = daysHtml;
+    bindCalendarEventsAndDragDrop();
+}
+
+// Interceptadores de clique em eventos do calendário para não propagar ao clique no dia
+function handleCalendarEventClick(event, projectId) {
+    if (event) event.stopPropagation();
+    openProjectDetailsModal(projectId);
+}
+
+function handleCalendarMoreBtnClick(event, dateKey) {
+    if (event) event.stopPropagation();
+    openCalendarDayEventsModal(dateKey);
 }
 
 // Navegação de Meses
@@ -848,24 +874,330 @@ function openCalendarDayEventsModal(dateKey) {
     });
 
     if (dayProjects.length > 0) {
-        // Abre os detalhes do primeiro projeto associado àquele dia
         openProjectDetailsModal(dayProjects[0].id);
+    }
+}
+
+// ==========================================================================
+// DRAG & DROP E INTERAÇÕES DO CALENDÁRIO MENSAL
+// ==========================================================================
+function bindCalendarEventsAndDragDrop() {
+    const cells = document.querySelectorAll('.calendar-day-cell');
+    cells.forEach(cell => {
+        // 1. Clique no quadrado do dia para criar Novo Projeto ou Atividade
+        cell.addEventListener('click', (e) => {
+            // Se o clique foi numa pílula de evento ou no botão de "+ mais X", não abre o quick add
+            if (e.target.closest('.cal-event-pill') || e.target.closest('.cal-more-events-btn')) {
+                return;
+            }
+            const dateKey = cell.dataset.date;
+            if (dateKey) {
+                openCalendarQuickAddModal(dateKey);
+            }
+        });
+
+        // 2. Eventos de Drop Target na célula do dia
+        cell.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            cell.classList.add('drag-over-day');
+        });
+
+        cell.addEventListener('dragleave', (e) => {
+            if (!cell.contains(e.relatedTarget)) {
+                cell.classList.remove('drag-over-day');
+            }
+        });
+
+        cell.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            cell.classList.remove('drag-over-day');
+
+            let dragData = null;
+            try {
+                const rawJson = e.dataTransfer.getData('application/json');
+                if (rawJson) {
+                    dragData = JSON.parse(rawJson);
+                }
+            } catch (err) {
+                console.error('Falha ao parsear drag data do calendário:', err);
+                return;
+            }
+
+            if (!dragData || dragData.type !== 'activity') return;
+
+            const targetDate = cell.dataset.date;
+            if (!targetDate || targetDate === dragData.date) {
+                return; // Mesma data, nenhuma alteração
+            }
+
+            await handleMoveActivityDate(dragData.projectId, dragData.activityId, dragData.description, dragData.date, targetDate);
+        });
+    });
+
+    // 3. Eventos de Drag Source nas pílulas de atividade
+    const draggablePills = document.querySelectorAll('.cal-event-pill.draggable-cal-event');
+    draggablePills.forEach(pill => {
+        pill.addEventListener('dragstart', (e) => {
+            pill.classList.add('dragging');
+            const dragPayload = {
+                type: 'activity',
+                projectId: pill.dataset.projectId,
+                activityId: pill.dataset.activityId,
+                description: decodeURIComponent(pill.dataset.activityDesc || ''),
+                date: pill.dataset.activityDate,
+                status: pill.dataset.activityStatus
+            };
+            e.dataTransfer.setData('application/json', JSON.stringify(dragPayload));
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        pill.addEventListener('dragend', () => {
+            pill.classList.remove('dragging');
+            document.querySelectorAll('.calendar-day-cell.drag-over-day').forEach(c => c.classList.remove('drag-over-day'));
+        });
+    });
+}
+
+// Altera a data de uma atividade ao ser arrastada e solta em outro dia
+async function handleMoveActivityDate(projectId, activityId, description, oldDate, newDate) {
+    const projId = Number(projectId);
+    const project = state.projects.find(p => p.id === projId);
+
+    if (!project) {
+        Toast.show('Projeto não localizado.', 'error');
+        return;
+    }
+
+    if (project.can_edit === false) {
+        Toast.show('Você não possui permissão para editar atividades deste projeto.', 'warning');
+        return;
+    }
+
+    try {
+        // Carrega o projeto completo para garantir lista de atividades atualizada
+        let fullProject = state._cachedProjectForActivities && state._cachedProjectForActivities.id === projId
+            ? state._cachedProjectForActivities
+            : null;
+        if (!fullProject) {
+            fullProject = await api.getProjectById(projId);
+        }
+
+        const activities = Array.isArray(fullProject.activities) ? JSON.parse(JSON.stringify(fullProject.activities)) : [];
+        let updated = false;
+
+        for (let act of activities) {
+            const actIdMatch = activityId && act.id && String(act.id) === String(activityId);
+            const actDescMatch = act.description === description && ((act.target_date || act.targetDate) === oldDate);
+
+            if (actIdMatch || actDescMatch) {
+                act.target_date = newDate;
+                delete act.targetDate;
+                updated = true;
+                break;
+            }
+        }
+
+        if (!updated) {
+            Toast.show('Etapa não encontrada no projeto para reescalonamento.', 'warning');
+            return;
+        }
+
+        // Mantém consistência temporal de datas de início e fim no validador
+        let newEndDate = fullProject.end_date;
+        let newStartDate = fullProject.start_date;
+        if (newDate > newEndDate) {
+            newEndDate = newDate;
+        }
+        if (newDate < newStartDate) {
+            newStartDate = newDate;
+        }
+
+        const payload = {
+            name: fullProject.name,
+            classification: fullProject.classification,
+            type: fullProject.type,
+            projectDate: fullProject.project_date,
+            startDate: newStartDate,
+            endDate: newEndDate,
+            objective: fullProject.objective,
+            evaluationAnalysis: fullProject.evaluation_analysis || null,
+            status: fullProject.status,
+            responsibles: fullProject.responsibles && fullProject.responsibles.length > 0
+                ? fullProject.responsibles
+                : [{ name: fullProject.responsible_name, email: fullProject.responsible_email, phone: fullProject.responsible_phone }],
+            locations: fullProject.locations && fullProject.locations.length > 0
+                ? fullProject.locations.map(l => typeof l === 'string' ? l : l.name)
+                : [fullProject.location],
+            activities: activities.map(a => ({
+                description: a.description,
+                target_date: a.target_date,
+                status: a.status || 'Pendente'
+            }))
+        };
+
+        await api.updateProject(projId, payload);
+        const formattedNewDate = newDate.split('-').reverse().join('/');
+        Toast.show(`Etapa reagendada para ${formattedNewDate} com sucesso!`, 'success');
+        scheduleDashboardReload(200);
+    } catch (error) {
+        Toast.show(`Erro ao mover etapa: ${error.message}`, 'error');
+        scheduleDashboardReload(500);
+    }
+}
+
+// ==========================================================================
+// MODAL DE CRIAÇÃO RÁPIDA NO CALENDÁRIO (PROJETO OU ATIVIDADE)
+// ==========================================================================
+let currentQuickAddDate = null;
+
+function openCalendarQuickAddModal(dateKey) {
+    currentQuickAddDate = dateKey;
+    const parts = dateKey.split('-');
+    const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+
+    const titleEl = document.getElementById('quick-add-modal-title');
+    const badgeEl = document.getElementById('quick-add-badge-date');
+    const hiddenDate = document.getElementById('quick-act-date');
+    const displayDate = document.getElementById('quick-act-display-date');
+    const projectSelect = document.getElementById('quick-act-project-select');
+    const descInput = document.getElementById('quick-act-desc');
+    const statusSelect = document.getElementById('quick-act-status');
+    const submitBtn = document.getElementById('btn-submit-quick-act');
+
+    if (titleEl) titleEl.textContent = `Novo Registro - ${formattedDate}`;
+    if (badgeEl) badgeEl.textContent = formattedDate;
+    if (hiddenDate) hiddenDate.value = dateKey;
+    if (displayDate) displayDate.value = dateKey;
+    if (descInput) descInput.value = '';
+    if (statusSelect) statusSelect.value = 'Pendente';
+
+    // Carrega projetos editáveis
+    if (projectSelect) {
+        const editableProjects = (state.projects || []).filter(p => p.can_edit !== false);
+        if (editableProjects.length === 0) {
+            projectSelect.innerHTML = '<option value="">Nenhum projeto editável encontrado</option>';
+            projectSelect.disabled = true;
+            if (descInput) descInput.disabled = true;
+            if (submitBtn) submitBtn.disabled = true;
+        } else {
+            projectSelect.disabled = false;
+            if (descInput) descInput.disabled = false;
+            if (submitBtn) submitBtn.disabled = false;
+            projectSelect.innerHTML = '<option value="">Selecione o projeto...</option>' +
+                editableProjects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+        }
+    }
+
+    const modal = document.getElementById('modal-calendar-quick-add');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('active');
+    }
+}
+
+function closeCalendarQuickAddModal() {
+    const modal = document.getElementById('modal-calendar-quick-add');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('active');
+    }
+    currentQuickAddDate = null;
+}
+
+async function handleQuickAddActivity(e) {
+    e.preventDefault();
+    const projectId = document.getElementById('quick-act-project-select').value;
+    const description = document.getElementById('quick-act-desc').value.trim();
+    const targetDate = document.getElementById('quick-act-display-date').value || document.getElementById('quick-act-date').value;
+    const status = document.getElementById('quick-act-status').value || 'Pendente';
+
+    if (!projectId) {
+        Toast.show('Selecione o projeto de destino para a etapa.', 'warning');
+        return;
+    }
+    if (!description) {
+        Toast.show('Informe a descrição da etapa.', 'warning');
+        return;
+    }
+    if (!targetDate) {
+        Toast.show('Informe a data prevista para a etapa.', 'warning');
+        return;
+    }
+
+    const submitBtn = document.getElementById('btn-submit-quick-act');
+    const originalText = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>Adicionando...</span>';
+    }
+
+    try {
+        const fullProject = await api.getProjectById(projectId);
+        const activities = Array.isArray(fullProject.activities) ? [...fullProject.activities] : [];
+
+        activities.push({
+            description: description,
+            target_date: targetDate,
+            status: status
+        });
+
+        let newStartDate = fullProject.start_date;
+        let newEndDate = fullProject.end_date;
+        if (targetDate > newEndDate) newEndDate = targetDate;
+        if (targetDate < newStartDate) newStartDate = targetDate;
+
+        const payload = {
+            name: fullProject.name,
+            classification: fullProject.classification,
+            type: fullProject.type,
+            projectDate: fullProject.project_date,
+            startDate: newStartDate,
+            endDate: newEndDate,
+            objective: fullProject.objective,
+            evaluationAnalysis: fullProject.evaluation_analysis || null,
+            status: fullProject.status,
+            responsibles: fullProject.responsibles && fullProject.responsibles.length > 0
+                ? fullProject.responsibles
+                : [{ name: fullProject.responsible_name, email: fullProject.responsible_email, phone: fullProject.responsible_phone }],
+            locations: fullProject.locations && fullProject.locations.length > 0
+                ? fullProject.locations.map(l => typeof l === 'string' ? l : l.name)
+                : [fullProject.location],
+            activities: activities.map(a => ({
+                description: a.description,
+                target_date: a.target_date || a.targetDate,
+                status: a.status || 'Pendente'
+            }))
+        };
+
+        await api.updateProject(projectId, payload);
+        Toast.show('Etapa adicionada com sucesso ao cronograma!', 'success');
+        closeCalendarQuickAddModal();
+        scheduleDashboardReload(200);
+    } catch (error) {
+        Toast.show(`Falha ao adicionar etapa: ${error.message}`, 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
     }
 }
 
 // ==========================================================================
 // MODAL DE CADASTRO / EDIÇÃO DE PROJETO
 // ==========================================================================
-function openCreateProjectModal() {
+function openCreateProjectModal(prefillDate = null) {
     state.editingProjectId = null;
     document.getElementById('project-modal-title').textContent = 'Novo Projeto';
     document.getElementById('project-form').reset();
     document.getElementById('project-id-input').value = '';
 
-    // Data padrão de hoje
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('proj-date').value = today;
-    document.getElementById('proj-start-date').value = today;
+    // Data padrão: usa prefillDate se fornecido ou a data de hoje
+    const targetDate = prefillDate || new Date().toISOString().split('T')[0];
+    document.getElementById('proj-date').value = targetDate;
+    document.getElementById('proj-start-date').value = targetDate;
+    document.getElementById('proj-end-date').value = targetDate;
 
     // Inicializa containers dinâmicos
     document.getElementById('responsibles-container').innerHTML = '';
@@ -876,7 +1208,7 @@ function openCreateProjectModal() {
 
     const scheduleContainer = document.getElementById('schedule-rows-container');
     scheduleContainer.innerHTML = '';
-    addScheduleRow();
+    addScheduleRow({ target_date: targetDate });
 
     document.getElementById('project-modal-overlay').classList.add('active');
 }
@@ -1027,9 +1359,9 @@ function addScheduleRow(data = null) {
     const container = document.getElementById('schedule-rows-container');
     const rowId = `row-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     
-    const description = data ? data.description : '';
-    const targetDate = data ? data.target_date : '';
-    const status = data ? data.status : 'Pendente';
+    const description = data ? (data.description || '') : '';
+    const targetDate = data ? (data.target_date || data.targetDate || data.date || '') : '';
+    const status = data ? (data.status || 'Pendente') : 'Pendente';
 
     const row = document.createElement('div');
     row.className = 'schedule-row';
@@ -2098,6 +2430,25 @@ function bindGlobalEvents() {
 
     const formAddShare = document.getElementById('form-add-share');
     if (formAddShare) formAddShare.addEventListener('submit', handleAddShare);
+
+    // 15. Modal de Criação Rápida no Calendário
+    const btnCloseQuickAdd = document.getElementById('btn-close-quick-add-modal');
+    if (btnCloseQuickAdd) btnCloseQuickAdd.addEventListener('click', closeCalendarQuickAddModal);
+
+    const btnCancelQuickAdd = document.getElementById('btn-cancel-quick-add');
+    if (btnCancelQuickAdd) btnCancelQuickAdd.addEventListener('click', closeCalendarQuickAddModal);
+
+    const btnQuickNewProj = document.getElementById('btn-quick-new-project');
+    if (btnQuickNewProj) {
+        btnQuickNewProj.addEventListener('click', () => {
+            const dateToUse = currentQuickAddDate;
+            closeCalendarQuickAddModal();
+            openCreateProjectModal(dateToUse);
+        });
+    }
+
+    const formQuickAddAct = document.getElementById('form-quick-add-activity');
+    if (formQuickAddAct) formQuickAddAct.addEventListener('submit', handleQuickAddActivity);
 }
 
 function escapeHtml(str) {

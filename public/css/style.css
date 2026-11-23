@@ -2298,6 +2298,74 @@ textarea {
     text-decoration: underline;
 }
 
+/* Interatividade e Drag & Drop nas Células do Calendário */
+.calendar-day-cell {
+    cursor: pointer;
+    user-select: none;
+}
+
+.calendar-day-cell:hover {
+    background: var(--color-bg-surface-elevated);
+}
+
+.calendar-day-cell.drag-over-day {
+    background: rgba(37, 99, 235, 0.16) !important;
+    outline: 2px dashed var(--color-primary-500);
+    outline-offset: -2px;
+}
+
+.cal-event-pill.draggable-cal-event {
+    cursor: grab;
+}
+
+.cal-event-pill.draggable-cal-event:active,
+.cal-event-pill.dragging {
+    cursor: grabbing;
+    opacity: 0.45;
+    transform: scale(0.97);
+}
+
+/* Modal de Criação Rápida no Calendário */
+.quick-add-option-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.9rem 1rem;
+    background: var(--color-bg-body);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.quick-add-option-card:hover {
+    border-color: var(--color-primary-500);
+    background: var(--color-bg-surface-elevated);
+}
+
+.quick-add-option-icon {
+    font-size: 1.6rem;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.quick-add-option-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.quick-add-option-content h4 {
+    margin: 0 0 0.2rem 0;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+}
+
+.quick-add-option-content p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--color-text-secondary);
+}
+
 @media (max-width: 900px) {
     .calendar-day-cell {
         min-height: 85px;
