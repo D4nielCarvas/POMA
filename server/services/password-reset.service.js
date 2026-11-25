@@ -1,10 +1,12 @@
 const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { getDatabase } = require('../config/database');
 const { supabase: defaultSupabase, isSupabaseConfigured } = require('../config/supabase');
 const { sendPasswordResetEmail } = require('./email.service');
 
 const TOKEN_EXPIRY_HOURS = 1;
+const JWT_SECRET = process.env.JWT_SECRET || 'gestao-projetos-secret-key-dev-only-2026';
 
 const _UNSET = Symbol('unset');
 
@@ -17,18 +19,21 @@ class PasswordResetService {
     }
 
     // -------------------------------------------------------------------------
-    // Gera token seguro, persiste no banco e envia o e-mail
-    // Retorna sempre true para não revelar se o e-mail existe (proteção anti-enumeração)
+    // Gera token seguro (JWT stateless assinado com hash atual da senha -> uso único garantido)
+    // Não depende de tabela extra no Supabase; funciona em qualquer instância.
     // -------------------------------------------------------------------------
     async requestReset(email) {
         const normalizedEmail = email.trim().toLowerCase();
         const user = await this._findUserByEmail(normalizedEmail);
 
         if (user) {
-            const token = crypto.randomBytes(48).toString('hex'); // 96 chars hex
-            const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
+            const secret = `${JWT_SECRET}:${user.password_hash || ''}`;
+            const token = jwt.sign(
+                { uid: user.id, email: user.email, purpose: 'password_reset' },
+                secret,
+                { expiresIn: `${TOKEN_EXPIRY_HOURS}h` }
+            );
 
-            await this._saveToken(user, token, expiresAt);
             await sendPasswordResetEmail(user.email, user.name, token);
         }
 
@@ -37,7 +42,7 @@ class PasswordResetService {
     }
 
     // -------------------------------------------------------------------------
-    // Valida o token e redefine a senha
+    // Valida o token (JWT stateless ou legado do banco) e redefine a senha
     // -------------------------------------------------------------------------
     async resetPassword(token, newPassword) {
         if (!token || typeof token !== 'string' || token.length < 10) {
@@ -47,8 +52,31 @@ class PasswordResetService {
             throw new Error('A nova senha deve ter no mínimo 6 caracteres.');
         }
 
-        const record = await this._findToken(token);
+        // 1. Tenta validação stateless via JWT
+        const decoded = jwt.decode(token);
+        if (decoded && decoded.purpose === 'password_reset' && decoded.email) {
+            const user = await this._findUserByEmail(decoded.email);
+            if (!user) {
+                throw new Error('Link de recuperação inválido ou já utilizado.');
+            }
 
+            try {
+                const secret = `${JWT_SECRET}:${user.password_hash || ''}`;
+                jwt.verify(token, secret);
+            } catch (jwtErr) {
+                if (jwtErr.name === 'TokenExpiredError') {
+                    throw new Error('O link de recuperação expirou. Solicite um novo.');
+                }
+                throw new Error('Link de recuperação inválido ou já utilizado.');
+            }
+
+            const passwordHash = await bcrypt.hash(newPassword, 10);
+            await this._updateUserPasswordDirect(user, passwordHash);
+            return true;
+        }
+
+        // 2. Fallback para tokens hex legados salvos em banco
+        const record = await this._findToken(token);
         if (!record) {
             throw new Error('Link de recuperação inválido ou já utilizado.');
         }
@@ -74,7 +102,7 @@ class PasswordResetService {
             try {
                 const { data, error } = await this.supabase
                     .from('users')
-                    .select('id, name, email')
+                    .select('id, name, email, password_hash')
                     .eq('email', email)
                     .maybeSingle();
                 if (!error && data) return data;
@@ -84,9 +112,28 @@ class PasswordResetService {
         }
 
         const row = this.db.prepare(
-            'SELECT id, name, email FROM users WHERE email = ?'
+            'SELECT id, name, email, password_hash FROM users WHERE email = ?'
         ).get(email);
         return row || null;
+    }
+
+    async _updateUserPasswordDirect(user, passwordHash) {
+        if (this.supabase) {
+            try {
+                await this.supabase
+                    .from('users')
+                    .update({ password_hash: passwordHash })
+                    .eq('email', user.email);
+            } catch (err) {
+                console.warn('[PasswordReset] Erro ao sincronizar senha com Supabase:', err.message);
+            }
+        }
+
+        try {
+            this.db.prepare('UPDATE users SET password_hash = ? WHERE email = ?').run(passwordHash, user.email);
+        } catch (dbErr) {
+            console.warn('[PasswordReset] Erro ao atualizar senha no SQLite local:', dbErr.message);
+        }
     }
 
     async _saveToken(user, token, expiresAt) {

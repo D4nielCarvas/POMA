@@ -35,48 +35,115 @@ function createTransporter() {
 }
 
 /**
- * Envia o e-mail de recuperação de senha.
- * Se o SMTP não estiver configurado, loga o link no console para uso em desenvolvimento.
- *
- * @param {string} toEmail  - Endereço do destinatário
- * @param {string} toName   - Nome do destinatário
- * @param {string} token    - Token seguro de recuperação
+ * Envia e-mail usando API HTTP (Brevo ou Resend na porta 443 - imune a bloqueios SMTP do Render)
+ * ou faz fallback para Nodemailer SMTP (Zoho / Gmail / etc.).
  */
-async function sendPasswordResetEmail(toEmail, toName, token) {
-    const resetUrl = `${APP_URL}/reset-password?token=${token}`;
+async function dispatchEmail({ to, subject, html, fallbackPreviewUrl = null, contextLabel = 'E-mail' }) {
+    const senderEmail = process.env.SMTP_USER || 'daniel.carvas@brancoperes.com.br';
+    const fromHeader = process.env.EMAIL_FROM || `"${APP_NAME}" <${senderEmail}>`;
 
+    // 1. Prioridade: Brevo HTTP API (porta 443 - funciona 100% no Render Free Tier)
+    if (process.env.BREVO_API_KEY) {
+        try {
+            const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+                method: 'POST',
+                headers: {
+                    'accept': 'application/json',
+                    'api-key': process.env.BREVO_API_KEY,
+                    'content-type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sender: { name: APP_NAME, email: senderEmail },
+                    to: [{ email: to }],
+                    subject,
+                    htmlContent: html
+                })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || `Brevo HTTP ${response.status}`);
+            }
+            console.log(`[Email Service - Brevo API] ${contextLabel} enviado para ${to}. MessageId: ${data.messageId}`);
+            return { messageId: data.messageId };
+        } catch (err) {
+            console.error(`[Email Service Error - Brevo] Falha ao enviar para ${to}:`, err.message);
+            return { error: err.message, preview: fallbackPreviewUrl };
+        }
+    }
+
+    // 2. Prioridade: Resend HTTP API (porta 443 - funciona 100% no Render Free Tier)
+    if (process.env.RESEND_API_KEY) {
+        try {
+            const response = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    from: fromHeader,
+                    to: [to],
+                    subject,
+                    html
+                })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || `Resend HTTP ${response.status}`);
+            }
+            console.log(`[Email Service - Resend API] ${contextLabel} enviado para ${to}. Id: ${data.id}`);
+            return { messageId: data.id };
+        } catch (err) {
+            console.error(`[Email Service Error - Resend] Falha ao enviar para ${to}:`, err.message);
+            return { error: err.message, preview: fallbackPreviewUrl };
+        }
+    }
+
+    // 3. Fallback: Nodemailer SMTP (Zoho / Localhost)
     const transporter = createTransporter();
-
     if (!transporter) {
-        // Fallback de desenvolvimento: exibe o link no console
         console.log('\n========================================================');
-        console.log('[Email Service] SMTP não configurado. Link de recuperação:');
-        console.log(`  Para: ${toEmail}`);
-        console.log(`  Link: ${resetUrl}`);
+        console.log(`[Email Service] Provedor de e-mail não configurado (${contextLabel}):`);
+        console.log(`  Para: ${to}`);
+        if (fallbackPreviewUrl) console.log(`  Link: ${fallbackPreviewUrl}`);
         console.log('========================================================\n');
-        return { preview: resetUrl };
+        return { preview: fallbackPreviewUrl };
     }
 
     try {
-        const html = buildResetEmailHtml(toName, resetUrl);
-
         const info = await transporter.sendMail({
-            from: `"${APP_NAME}" <${process.env.SMTP_USER}>`,
-            to: toEmail,
-            subject: `[${APP_NAME}] Redefinição de Senha`,
+            from: fromHeader,
+            to,
+            subject,
             html
         });
-
-        console.log(`[Email Service] E-mail de redefinição enviado para ${toEmail}. MessageId: ${info.messageId}`);
+        console.log(`[Email Service - SMTP] ${contextLabel} enviado para ${to}. MessageId: ${info.messageId}`);
         return { messageId: info.messageId };
     } catch (err) {
-        console.error(`[Email Service Error] Falha ao enviar e-mail para ${toEmail}:`, err.message);
-        console.log('\n========================================================');
-        console.log('[Email Service Fallback] Link de recuperação gerado:');
-        console.log(`  Link: ${resetUrl}`);
-        console.log('========================================================\n');
-        return { error: err.message, preview: resetUrl };
+        console.error(`[Email Service Error] Falha ao enviar e-mail para ${to}:`, err.message);
+        if (fallbackPreviewUrl) {
+            console.log('\n========================================================');
+            console.log(`[Email Service Fallback] Link gerado (${contextLabel}):`);
+            console.log(`  Link: ${fallbackPreviewUrl}`);
+            console.log('========================================================\n');
+        }
+        return { error: err.message, preview: fallbackPreviewUrl };
     }
+}
+
+/**
+ * Envia o e-mail de recuperação de senha.
+ */
+async function sendPasswordResetEmail(toEmail, toName, token) {
+    const resetUrl = `${APP_URL}/reset-password?token=${token}`;
+    const html = buildResetEmailHtml(toName, resetUrl);
+    return dispatchEmail({
+        to: toEmail,
+        subject: `[${APP_NAME}] Redefinição de Senha`,
+        html,
+        fallbackPreviewUrl: resetUrl,
+        contextLabel: 'Redefinição de senha'
+    });
 }
 
 /**
@@ -84,32 +151,14 @@ async function sendPasswordResetEmail(toEmail, toName, token) {
  */
 async function sendAccountVerificationEmail(toEmail, toName, token) {
     const verifyUrl = `${APP_URL}/api/auth/verify-email?token=${token}`;
-    const transporter = createTransporter();
-
-    if (!transporter) {
-        console.log('\n========================================================');
-        console.log('[Email Service] SMTP não configurado. Link de ativação de conta:');
-        console.log(`  Para: ${toEmail}`);
-        console.log(`  Link: ${verifyUrl}`);
-        console.log('========================================================\n');
-        return { preview: verifyUrl };
-    }
-
-    try {
-        const html = buildVerificationEmailHtml(toName, verifyUrl);
-        const info = await transporter.sendMail({
-            from: process.env.EMAIL_FROM || `"${APP_NAME}" <${process.env.SMTP_USER}>`,
-            to: toEmail,
-            subject: `[${APP_NAME}] Confirme seu endereço de e-mail para ativar sua conta`,
-            html
-        });
-
-        console.log(`[Email Service] E-mail de confirmação enviado para ${toEmail}. MessageId: ${info.messageId}`);
-        return { messageId: info.messageId };
-    } catch (err) {
-        console.error(`[Email Service Error] Falha ao enviar confirmação para ${toEmail}:`, err.message);
-        return { error: err.message, preview: verifyUrl };
-    }
+    const html = buildVerificationEmailHtml(toName, verifyUrl);
+    return dispatchEmail({
+        to: toEmail,
+        subject: `[${APP_NAME}] Confirme seu endereço de e-mail para ativar sua conta`,
+        html,
+        fallbackPreviewUrl: verifyUrl,
+        contextLabel: 'Confirmação de conta'
+    });
 }
 
 /**
@@ -117,28 +166,14 @@ async function sendAccountVerificationEmail(toEmail, toName, token) {
  */
 async function sendProjectSummaryEmail(toEmail, recipientName, senderName, projectData, note = '') {
     const projectUrl = `${APP_URL}/#project-${projectData.id}`;
-    const transporter = createTransporter();
-
-    if (!transporter) {
-        console.log(`[Email Service] SMTP não configurado. Projeto ${projectData.name} encaminhado para ${toEmail}`);
-        return { preview: projectUrl };
-    }
-
-    try {
-        const html = buildProjectSummaryEmailHtml(recipientName, senderName, projectData, projectUrl, note);
-        const info = await transporter.sendMail({
-            from: process.env.EMAIL_FROM || `"${APP_NAME}" <${process.env.SMTP_USER}>`,
-            to: toEmail,
-            subject: `[${APP_NAME}] Compartilhamento de Projeto: ${projectData.name}`,
-            html
-        });
-
-        console.log(`[Email Service] Projeto enviado para ${toEmail}. MessageId: ${info.messageId}`);
-        return { messageId: info.messageId };
-    } catch (err) {
-        console.error(`[Email Service Error] Falha ao enviar projeto para ${toEmail}:`, err.message);
-        return { error: err.message };
-    }
+    const html = buildProjectSummaryEmailHtml(recipientName, senderName, projectData, projectUrl, note);
+    return dispatchEmail({
+        to: toEmail,
+        subject: `[${APP_NAME}] Compartilhamento de Projeto: ${projectData.name}`,
+        html,
+        fallbackPreviewUrl: projectUrl,
+        contextLabel: `Projeto (${projectData.name})`
+    });
 }
 
 /**
@@ -146,32 +181,18 @@ async function sendProjectSummaryEmail(toEmail, recipientName, senderName, proje
  */
 async function sendDailyDigestEmail(toEmail, recipientName, digestData) {
     const dashboardUrl = `${APP_URL}`;
-    const transporter = createTransporter();
+    const html = buildDailyDigestEmailHtml(recipientName, digestData, dashboardUrl);
+    const overdueCount = digestData.overdueActivities ? digestData.overdueActivities.length : 0;
+    const upcomingCount = digestData.upcomingActivities ? digestData.upcomingActivities.length : 0;
+    const totalAlerts = overdueCount + upcomingCount;
 
-    if (!transporter) {
-        console.log(`[Email Service] SMTP não configurado. Alerta diário para ${toEmail}`);
-        return { preview: dashboardUrl };
-    }
-
-    try {
-        const html = buildDailyDigestEmailHtml(recipientName, digestData, dashboardUrl);
-        const overdueCount = digestData.overdueActivities ? digestData.overdueActivities.length : 0;
-        const upcomingCount = digestData.upcomingActivities ? digestData.upcomingActivities.length : 0;
-        const totalAlerts = overdueCount + upcomingCount;
-
-        const info = await transporter.sendMail({
-            from: process.env.EMAIL_FROM || `"${APP_NAME}" <${process.env.SMTP_USER}>`,
-            to: toEmail,
-            subject: `[${APP_NAME}] Alerta Matinal: ${totalAlerts} etapa(s) requerem sua atenção`,
-            html
-        });
-
-        console.log(`[Email Service] Alerta diário enviado para ${toEmail}. MessageId: ${info.messageId}`);
-        return { messageId: info.messageId };
-    } catch (err) {
-        console.error(`[Email Service Error] Falha ao enviar alerta diário para ${toEmail}:`, err.message);
-        return { error: err.message };
-    }
+    return dispatchEmail({
+        to: toEmail,
+        subject: `[${APP_NAME}] Alerta Matinal: ${totalAlerts} etapa(s) requerem sua atenção`,
+        html,
+        fallbackPreviewUrl: dashboardUrl,
+        contextLabel: 'Alerta diário'
+    });
 }
 
 function buildResetEmailHtml(name, resetUrl) {
