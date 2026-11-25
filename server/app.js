@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const path = require('node:path');
 const authRoutes = require('./routes/auth.routes');
@@ -10,7 +11,24 @@ const { apiLimiter } = require('./middleware/rate-limit.middleware');
 
 const app = express();
 
-// Hardening de Cabeçalhos HTTP com Helmet
+// 1. Confiança em Proxy Reverso (Render, Vercel, Cloudflare, Nginx)
+// Essencial para identificação correta de IP real do cliente no rate limiting e detecção de HTTPS
+app.set('trust proxy', 1);
+
+// 2. Redirecionamento forçado para HTTPS em Produção
+if (process.env.NODE_ENV === 'production') {
+    app.use((req, res, next) => {
+        if (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] !== 'https') {
+            return res.redirect(301, `https://${req.headers.host}${req.url}`);
+        }
+        next();
+    });
+}
+
+// 3. Compressão HTTP (Gzip/Brotli) para respostas JSON e arquivos estáticos
+app.use(compression());
+
+// 4. Hardening de Cabeçalhos HTTP com Helmet
 // Configurações personalizadas para permitir scripts/estilos locais, Google Fonts e inline handlers
 app.use(helmet({
     contentSecurityPolicy: {
@@ -81,8 +99,9 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Middlewares essenciais de parsing com limites estritos de payload
-app.use(cookieParser());
+// Middlewares essenciais de parsing com limites estritos de payload e assinatura de cookies
+const cookieSecret = process.env.COOKIE_SECRET || process.env.JWT_SECRET || 'nexus-poma-secure-cookie-salt';
+app.use(cookieParser(cookieSecret));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 

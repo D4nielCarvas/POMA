@@ -8,8 +8,10 @@ const authMiddleware = (req, res, next) => {
     try {
         let token = null;
 
-        // 1. Tenta obter o token do cookie seguro HttpOnly
-        if (req.cookies && req.cookies.nexus_token) {
+        // 1. Tenta obter o token do cookie assinado (signedCookies) ou regular seguro HttpOnly
+        if (req.signedCookies && req.signedCookies.nexus_token) {
+            token = req.signedCookies.nexus_token;
+        } else if (req.cookies && req.cookies.nexus_token) {
             token = req.cookies.nexus_token;
         }
 

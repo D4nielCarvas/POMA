@@ -53,6 +53,12 @@ class ProjectRepository {
             );
         }
 
+        if (Number.isInteger(filters.limit) && filters.limit > 0) {
+            const from = Number.isInteger(filters.offset) ? filters.offset : 0;
+            const to = from + filters.limit - 1;
+            query = query.range(from, to);
+        }
+
         return query.then(({ data, error }) => {
             if (error) {
                 console.error('[Supabase ProjectRepository] findAll error:', error.message);
@@ -106,6 +112,10 @@ class ProjectRepository {
         }
 
         sql += ` GROUP BY p.id ORDER BY p.end_date ASC, p.id DESC`;
+        if (Number.isInteger(filters.limit) && filters.limit > 0) {
+            sql += ` LIMIT ? OFFSET ?`;
+            params.push(filters.limit, Number.isInteger(filters.offset) ? filters.offset : 0);
+        }
         return this.db.prepare(sql).all(...params);
     }
 

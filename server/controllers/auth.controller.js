@@ -8,6 +8,7 @@ class AuthController {
     static _setAuthCookie(res, token) {
         res.cookie('nexus_token', token, {
             httpOnly: true,
+            signed: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
             maxAge: 24 * 60 * 60 * 1000 // 24 horas
