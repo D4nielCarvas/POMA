@@ -12,7 +12,9 @@ const state = {
         classification: '',
         type: '',
         deadline_status: '',
-        search: ''
+        search: '',
+        responsible: '',
+        location: ''
     },
     sort: 'end_date',          // 'end_date' | 'name_asc' | 'name_desc'
     currentView: 'grid',       // 'grid' | 'kanban' | 'calendar'
@@ -242,7 +244,33 @@ function renderNotificationsDropdown() {
 function renderProjectsGrid() {
     const grid = document.getElementById('projects-grid');
 
-    if (state.projects.length === 0) {
+    // Popula opções dinâmicas de Responsáveis e Locais
+    populateDynamicFilters(state.projects);
+
+    // Filtragem client-side por Responsável e Local
+    let projectsList = [...state.projects];
+    if (state.filters.responsible) {
+        const query = state.filters.responsible.toLowerCase();
+        projectsList = projectsList.filter(p => {
+            const matchesMain = (p.responsible_name || '').toLowerCase().includes(query);
+            const matchesList = Array.isArray(p.responsibles) && p.responsibles.some(r => (r.name || '').toLowerCase().includes(query));
+            return matchesMain || matchesList;
+        });
+    }
+
+    if (state.filters.location) {
+        const query = state.filters.location.toLowerCase();
+        projectsList = projectsList.filter(p => {
+            const matchesMain = (p.location || '').toLowerCase().includes(query);
+            const matchesList = Array.isArray(p.locations) && p.locations.some(l => {
+                const name = typeof l === 'string' ? l : l.name;
+                return (name || '').toLowerCase().includes(query);
+            });
+            return matchesMain || matchesList;
+        });
+    }
+
+    if (projectsList.length === 0) {
         grid.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">
@@ -260,11 +288,14 @@ function renderProjectsGrid() {
                 </button>
             </div>
         `;
+        renderPaginationControls(0, 0, 0);
+        renderKanbanBoard([]);
+        renderCalendarView([]);
         return;
     }
 
     // Ordenação client-side (server retorna por end_date; aqui aplicamos a preferência do usuário)
-    const sorted = [...state.projects];
+    const sorted = [...projectsList];
     if (state.sort === 'name_asc') {
         sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' }));
     } else if (state.sort === 'name_desc') {
@@ -758,11 +789,40 @@ function renderCalendarView(projectsList = state.projects) {
             const thursdayInfo = getCalendarCellDate(year, month, i + 4, firstDayOfMonth, daysInCurrentMonth, daysInPrevMonth);
             const weekOfYear = getISOWeekNumber(thursdayInfo.date);
 
+            // Verifica se a semana contém a data de hoje e calcula a carga de atividades
+            let isCurrentWeek = false;
+            let weekActivitiesCount = 0;
+            let hasOverdue = false;
+
+            for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+                const dayDateInfo = getCalendarCellDate(year, month, i + dayOffset, firstDayOfMonth, daysInCurrentMonth, daysInPrevMonth);
+                const dKey = `${dayDateInfo.year}-${pad(dayDateInfo.month + 1)}-${pad(dayDateInfo.day)}`;
+                if (dKey === todayStr) {
+                    isCurrentWeek = true;
+                }
+                const dayEvs = eventsByDate.get(dKey) || [];
+                dayEvs.forEach(ev => {
+                    if (ev.type === 'activity') {
+                        weekActivitiesCount++;
+                        if (ev.statusClass === 'status-atrasada') {
+                            hasOverdue = true;
+                        }
+                    }
+                });
+            }
+
+            const loadTooltip = weekActivitiesCount > 0 
+                ? `${weekActivitiesCount} atividade(s) nesta semana${hasOverdue ? ' (contém atividades atrasadas)' : ''}`
+                : 'Nenhuma atividade programada para esta semana';
+
             daysHtml += `
-                <div class="calendar-week-cell" title="${weekOfYear}ª semana do ano">
+                <div class="calendar-week-cell ${isCurrentWeek ? 'is-current-week' : ''}" title="${weekOfYear}ª semana do ano${isCurrentWeek ? ' (Semana Atual)' : ''}">
                     <div class="week-pill-tag">
                         <span class="week-pill-num">${weekOfYear}ª</span>
                         <span class="week-pill-label">sem.</span>
+                        <span class="week-pill-load ${hasOverdue ? 'has-overdue' : ''}" title="${escapeHtml(loadTooltip)}">
+                            ${weekActivitiesCount} ativ.
+                        </span>
                     </div>
                 </div>
             `;
@@ -792,6 +852,19 @@ function renderCalendarView(projectsList = state.projects) {
             const displayTitle = rawTitle.length > 26 ? rawTitle.substring(0, 24) + '...' : rawTitle;
             const isActivity = ev.type === 'activity';
             const isDraggable = isActivity && ev.canEdit !== false;
+            const isCompleted = ev.status === 'Concluída';
+
+            // Mini botão de check rápido de conclusão da etapa
+            const quickBtn = (isActivity && ev.canEdit !== false) ? `
+                <button type="button" 
+                        class="cal-quick-complete-btn ${isCompleted ? 'is-completed' : ''}" 
+                        onclick="toggleCalendarActivityStatus(event, ${ev.projectId}, ${ev.activityId ? ev.activityId : 'null'}, '${encodeURIComponent(ev.title)}', '${ev.date}', '${ev.status}')" 
+                        title="${isCompleted ? 'Reabrir etapa (marcar como Pendente)' : 'Marcar etapa como Concluída'}">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </button>
+            ` : `<span class="cal-event-project-dot"></span>`;
 
             return `
                 <div class="cal-event-pill ${ev.statusClass} ${isDraggable ? 'draggable-cal-event' : ''}" 
@@ -804,7 +877,7 @@ function renderCalendarView(projectsList = state.projects) {
                      data-activity-status="${ev.status}"
                      onclick="handleCalendarEventClick(event, ${ev.projectId})" 
                      title="[${escapeHtml(ev.projectName)}] ${escapeHtml(ev.title)} (${ev.status})${isDraggable ? ' - Arraste para mover de dia' : ''}">
-                    <span class="cal-event-project-dot"></span>
+                    ${quickBtn}
                     <span class="cal-event-title-text">${escapeHtml(displayTitle)}</span>
                 </div>
             `;
@@ -918,6 +991,104 @@ function openCalendarDayEventsModal(dateKey) {
 
     if (dayProjects.length > 0) {
         openProjectDetailsModal(dayProjects[0].id);
+    }
+}
+
+// ==========================================================================
+// AÇÕES RÁPIDAS E FILTROS DINÂMICOS DO CALENDÁRIO & DASHBOARD
+// ==========================================================================
+
+/**
+ * Alterna rapidamente o status da etapa (Concluída <-> Pendente)
+ * diretamente pelo check na pílula do calendário.
+ */
+async function toggleCalendarActivityStatus(event, projectId, activityId, encodedTitle, date, currentStatus) {
+    if (event) event.stopPropagation();
+
+    const title = decodeURIComponent(encodedTitle || '');
+    const newStatus = currentStatus === 'Concluída' ? 'Pendente' : 'Concluída';
+
+    try {
+        if (activityId && activityId !== 'null' && activityId !== 'undefined') {
+            await api.updateActivityStatus(projectId, activityId, newStatus);
+        } else {
+            const fullProject = await api.getProjectById(projectId);
+            const activities = fullProject.activities || [];
+            const targetAct = activities.find(a => a.description === title && ((a.target_date || a.targetDate) === date));
+            if (targetAct) {
+                targetAct.status = newStatus;
+                await api.updateProject(projectId, {
+                    name: fullProject.name,
+                    classification: fullProject.classification,
+                    type: fullProject.type,
+                    projectDate: fullProject.project_date,
+                    startDate: fullProject.start_date,
+                    endDate: fullProject.end_date,
+                    objective: fullProject.objective,
+                    evaluationAnalysis: fullProject.evaluation_analysis || null,
+                    status: fullProject.status,
+                    responsibles: fullProject.responsibles && fullProject.responsibles.length > 0
+                        ? fullProject.responsibles
+                        : [{ name: fullProject.responsible_name, email: fullProject.responsible_email, phone: fullProject.responsible_phone }],
+                    locations: fullProject.locations && fullProject.locations.length > 0
+                        ? fullProject.locations.map(l => typeof l === 'string' ? l : l.name)
+                        : [fullProject.location],
+                    activities: activities.map(a => ({
+                        description: a.description,
+                        target_date: a.target_date || a.targetDate,
+                        status: a.status || 'Pendente'
+                    }))
+                });
+            }
+        }
+
+        const msg = newStatus === 'Concluída' ? 'Etapa concluída com sucesso!' : 'Etapa reaberta como pendente!';
+        Toast.show(msg, 'success');
+        scheduleDashboardReload(100);
+    } catch (err) {
+        Toast.show(`Erro ao atualizar etapa: ${err.message}`, 'error');
+    }
+}
+
+/**
+ * Popula dinamicamente os selects de Responsável e Local de Execução
+ * com base nos projetos cadastrados no sistema.
+ */
+function populateDynamicFilters(projects = state.projects) {
+    const respSelect = document.getElementById('filter-responsible');
+    const locSelect = document.getElementById('filter-location');
+    if (!respSelect && !locSelect) return;
+
+    const currentResp = state.filters.responsible || '';
+    const currentLoc = state.filters.location || '';
+
+    const responsiblesSet = new Set();
+    const locationsSet = new Set();
+
+    (projects || []).forEach(p => {
+        if (p.responsible_name) responsiblesSet.add(p.responsible_name.trim());
+        if (Array.isArray(p.responsibles)) {
+            p.responsibles.forEach(r => { if (r.name) responsiblesSet.add(r.name.trim()); });
+        }
+        if (p.location) locationsSet.add(p.location.trim());
+        if (Array.isArray(p.locations)) {
+            p.locations.forEach(l => {
+                const name = typeof l === 'string' ? l : l.name;
+                if (name) locationsSet.add(name.trim());
+            });
+        }
+    });
+
+    if (respSelect) {
+        const sortedResp = Array.from(responsiblesSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        respSelect.innerHTML = '<option value="">Responsável: Todos</option>' +
+            sortedResp.map(r => `<option value="${escapeHtml(r)}" ${r === currentResp ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('');
+    }
+
+    if (locSelect) {
+        const sortedLoc = Array.from(locationsSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        locSelect.innerHTML = '<option value="">Local: Todos</option>' +
+            sortedLoc.map(l => `<option value="${escapeHtml(l)}" ${l === currentLoc ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('');
     }
 }
 
@@ -2383,6 +2554,22 @@ function bindGlobalEvents() {
         loadDashboard();
     });
 
+    const filterResp = document.getElementById('filter-responsible');
+    if (filterResp) {
+        filterResp.addEventListener('change', (e) => {
+            state.filters.responsible = e.target.value;
+            renderProjectsGrid();
+        });
+    }
+
+    const filterLoc = document.getElementById('filter-location');
+    if (filterLoc) {
+        filterLoc.addEventListener('change', (e) => {
+            state.filters.location = e.target.value;
+            renderProjectsGrid();
+        });
+    }
+
     // 10. Ordenação de projetos (client-side — sem nova requisição ao servidor)
     document.getElementById('sort-projects').addEventListener('change', (e) => {
         state.sort = e.target.value;
@@ -2454,12 +2641,16 @@ function bindGlobalEvents() {
     }
 
     document.getElementById('btn-reset-filters').addEventListener('click', () => {
-        state.filters = { classification: '', type: '', deadline_status: '', search: '' };
+        state.filters = { classification: '', type: '', deadline_status: '', search: '', responsible: '', location: '' };
         state.sort = 'end_date';
         document.getElementById('filter-search').value = '';
         document.getElementById('filter-classification').value = '';
         document.getElementById('filter-type').value = '';
         document.getElementById('filter-deadline').value = '';
+        const fResp = document.getElementById('filter-responsible');
+        if (fResp) fResp.value = '';
+        const fLoc = document.getElementById('filter-location');
+        if (fLoc) fLoc.value = '';
         document.getElementById('sort-projects').value = 'end_date';
         loadDashboard();
     });
