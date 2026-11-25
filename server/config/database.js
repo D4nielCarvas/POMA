@@ -45,12 +45,14 @@ class DatabaseConnection {
             try {
                 // Adiciona coluna email_verified se ainda não existir
                 try {
-                    this.db.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0;`);
-                    // Usuários antigos pré-existentes são mantidos verificados por padrão
-                    this.db.exec(`UPDATE users SET email_verified = 1 WHERE email_verified = 0;`);
+                    this.db.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1;`);
                 } catch (colErr) {
                     // Coluna já existe
                 }
+                // Garante que usuário demo nunca fique bloqueado
+                try {
+                    this.db.exec(`UPDATE users SET email_verified = 1 WHERE email = 'demo@cesinha.com';`);
+                } catch (demoErr) {}
 
                 this.db.exec(`
                     CREATE TABLE IF NOT EXISTS email_verification_tokens (

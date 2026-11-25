@@ -65,8 +65,8 @@ class AuthService {
             throw new Error('Credenciais inválidas. Verifique seu e-mail e senha.');
         }
 
-        // Se a conta ainda não foi confirmada por e-mail (0 ou false)
-        if (user.email_verified === 0 || user.email_verified === false) {
+        // Se a conta ainda não foi confirmada por e-mail (0 ou false), exceto conta demo
+        if (normalizedEmail !== 'demo@cesinha.com' && (user.email_verified === 0 || user.email_verified === false)) {
             const unverifiedErr = new Error('Sua conta ainda não foi confirmada. Verifique o link de ativação enviado para o seu e-mail.');
             unverifiedErr.status = 403;
             unverifiedErr.requireVerification = true;

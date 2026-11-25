@@ -187,10 +187,10 @@ class VerificationService {
             try {
                 const { data, error } = await this.supabase
                     .from('users')
-                    .select('id, name, email, role, email_verified')
+                    .select('id, name, email, role')
                     .eq('id', userId)
                     .maybeSingle();
-                if (!error && data) return data;
+                if (!error && data) return { ...data, email_verified: 1 };
             } catch (err) {}
         }
 
@@ -207,10 +207,13 @@ class VerificationService {
             try {
                 const { data, error } = await this.supabase
                     .from('users')
-                    .select('id, name, email, role, email_verified')
+                    .select('id, name, email, role')
                     .eq('email', email)
                     .maybeSingle();
-                if (!error && data) return data;
+                if (!error && data) {
+                    const localRow = this.db.prepare('SELECT email_verified FROM users WHERE email = ?').get(email);
+                    return { ...data, email_verified: localRow ? localRow.email_verified : 1 };
+                }
             } catch (err) {}
         }
 

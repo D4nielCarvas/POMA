@@ -14,21 +14,16 @@ class UserRepository {
     async create({ name, email, passwordHash, role = 'user', emailVerified = 0 }) {
         let createdUser = null;
 
-        // 1. Se o Supabase estiver disponível, grava na nuvem
+        // 1. Se o Supabase estiver disponível, grava na nuvem (schema padrão compatível)
         if (this.supabase) {
-            const insertPayload = {
-                name,
-                email,
-                password_hash: passwordHash,
-                role
-            };
-            if (emailVerified !== undefined) {
-                insertPayload.email_verified = Boolean(emailVerified);
-            }
-
             const { data, error } = await this.supabase
                 .from('users')
-                .insert(insertPayload)
+                .insert({
+                    name,
+                    email,
+                    password_hash: passwordHash,
+                    role
+                })
                 .select('id, name, email, role, created_at')
                 .single();
 
@@ -40,8 +35,7 @@ class UserRepository {
             createdUser = data;
         }
 
-        // 2. Sincroniza no SQLite local (cache para integridade referencial)
-        // Usa UPSERT por email para evitar conflito de PK entre sequências independentes
+        // 2. Sincroniza no SQLite local (cache para integridade referencial + controle de verificação)
         if (createdUser) {
             try {
                 this.db.prepare(`
@@ -82,30 +76,34 @@ class UserRepository {
     }
 
     async findByEmail(email) {
-        // 1. Consulta no Supabase se configurado
+        // 1. Consulta no Supabase se configurado (sem exigir coluna email_verified no PostgreSQL)
         if (this.supabase) {
             const { data, error } = await this.supabase
                 .from('users')
-                .select('id, name, email, password_hash, role, email_verified, created_at')
+                .select('id, name, email, password_hash, role, created_at')
                 .eq('email', email)
                 .maybeSingle();
 
             if (!error && data) {
-                // Sincroniza cache local no SQLite (UPSERT por email, sem forçar ID)
+                let localVerified = 1;
                 try {
+                    const localRow = this.db.prepare('SELECT email_verified FROM users WHERE email = ?').get(data.email);
+                    if (localRow && localRow.email_verified === 0) {
+                        localVerified = 0;
+                    }
+                    // Sincroniza cache local no SQLite preservando o status de verificação
                     this.db.prepare(`
                         INSERT INTO users (name, email, password_hash, role, email_verified)
                         VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT(email) DO UPDATE SET
                             name = excluded.name,
                             password_hash = excluded.password_hash,
-                            role = excluded.role,
-                            email_verified = excluded.email_verified
-                    `).run(data.name, data.email, data.password_hash, data.role, data.email_verified ? 1 : 0);
+                            role = excluded.role
+                    `).run(data.name, data.email, data.password_hash, data.role, localVerified);
                 } catch (cacheErr) {
                     console.warn('[Cache Sync Warning] Falha ao sincronizar usuário no SQLite local:', cacheErr.message);
                 }
-                return data;
+                return { ...data, email_verified: localVerified };
             }
         }
 
@@ -123,12 +121,12 @@ class UserRepository {
         if (this.supabase) {
             const { data, error } = await this.supabase
                 .from('users')
-                .select('id, name, email, role, email_verified, created_at')
+                .select('id, name, email, role, created_at')
                 .eq('id', id)
                 .maybeSingle();
 
             if (!error && data) {
-                return data;
+                return { ...data, email_verified: 1 };
             }
         }
 
