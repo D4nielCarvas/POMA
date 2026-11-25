@@ -1,7 +1,9 @@
 const nodemailer = require('nodemailer');
 
 const APP_NAME = 'Poma - Projetos em Inteligência Agrícola';
-const rawAppUrl = process.env.APP_URL || 'http://localhost:3000';
+const rawAppUrl = process.env.APP_URL
+    || process.env.RENDER_EXTERNAL_URL
+    || (process.env.NODE_ENV === 'production' ? 'https://projectbp.onrender.com' : 'http://localhost:3000');
 const APP_URL   = rawAppUrl.replace(/\/+$/, '');
 
 /**

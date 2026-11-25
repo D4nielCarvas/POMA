@@ -1,3 +1,12 @@
+const fs = require('node:fs');
+const path = require('node:path');
+
+// Carrega o arquivo .env local automaticamente (Node 20.12+ / 24 nativo, sem depender de dotenv)
+const envPath = path.join(__dirname, '../.env');
+if (fs.existsSync(envPath) && typeof process.loadEnvFile === 'function') {
+    process.loadEnvFile(envPath);
+}
+
 const app = require('./app');
 const { getDatabase } = require('./config/database');
 
