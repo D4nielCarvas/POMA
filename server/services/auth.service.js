@@ -41,7 +41,8 @@ class AuthService {
             name: name.trim(),
             email: normalizedEmail,
             passwordHash,
-            role: 'user'
+            role: 'user',
+            emailVerified: 0
         });
 
         const token = this.generateToken(user);
@@ -64,13 +65,22 @@ class AuthService {
             throw new Error('Credenciais inválidas. Verifique seu e-mail e senha.');
         }
 
+        // Se a conta ainda não foi confirmada por e-mail (0 ou false)
+        if (user.email_verified === 0 || user.email_verified === false) {
+            const unverifiedErr = new Error('Sua conta ainda não foi confirmada. Verifique o link de ativação enviado para o seu e-mail.');
+            unverifiedErr.status = 403;
+            unverifiedErr.requireVerification = true;
+            throw unverifiedErr;
+        }
+
         const token = this.generateToken(user);
         return {
             user: {
                 id: user.id,
                 name: user.name,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                email_verified: user.email_verified
             },
             token
         };

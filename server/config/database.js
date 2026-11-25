@@ -43,6 +43,28 @@ class DatabaseConnection {
 
             // Backfill de migração retrocompatível para responsáveis e locais
             try {
+                // Adiciona coluna email_verified se ainda não existir
+                try {
+                    this.db.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0;`);
+                    // Usuários antigos pré-existentes são mantidos verificados por padrão
+                    this.db.exec(`UPDATE users SET email_verified = 1 WHERE email_verified = 0;`);
+                } catch (colErr) {
+                    // Coluna já existe
+                }
+
+                this.db.exec(`
+                    CREATE TABLE IF NOT EXISTS email_verification_tokens (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        token VARCHAR(128) NOT NULL UNIQUE,
+                        expires_at DATETIME NOT NULL,
+                        used INTEGER NOT NULL DEFAULT 0,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON email_verification_tokens(token);
+                `);
+
                 this.db.exec(`
                     INSERT INTO project_responsibles (project_id, name, email, phone)
                     SELECT p.id, p.responsible_name, p.responsible_email, p.responsible_phone

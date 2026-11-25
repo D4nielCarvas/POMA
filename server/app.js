@@ -6,6 +6,7 @@ const cookieParser = require('cookie-parser');
 const path = require('node:path');
 const authRoutes = require('./routes/auth.routes');
 const projectRoutes = require('./routes/project.routes');
+const cronRoutes = require('./routes/cron.routes');
 const errorHandler = require('./middleware/error.middleware');
 const { apiLimiter } = require('./middleware/rate-limit.middleware');
 
@@ -114,6 +115,7 @@ app.use('/api', apiLimiter);
 // Rotas da API RESTful
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/cron', cronRoutes);
 
 // Endpoint de Health Check
 app.get('/api/health', (req, res) => {

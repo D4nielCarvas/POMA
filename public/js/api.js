@@ -100,9 +100,18 @@ class ApiClient {
             method: 'POST',
             body: JSON.stringify({ name, email, password })
         });
-        this.setToken(res.data.token);
-        this.setUser(res.data.user);
-        return res.data;
+        if (res.data && res.data.token) {
+            this.setToken(res.data.token);
+            this.setUser(res.data.user);
+        }
+        return res;
+    }
+
+    async resendVerification(email) {
+        return await this.request('/auth/resend-verification', {
+            method: 'POST',
+            body: JSON.stringify({ email })
+        });
     }
 
     async logout() {
@@ -185,6 +194,13 @@ class ApiClient {
             method: 'DELETE'
         });
         return res;
+    }
+
+    async sendProjectEmail(projectId, recipientEmail, recipientName = '', note = '') {
+        return await this.request(`/projects/${projectId}/send-email`, {
+            method: 'POST',
+            body: JSON.stringify({ recipientEmail, recipientName, note })
+        });
     }
 
     // Password Recovery endpoints

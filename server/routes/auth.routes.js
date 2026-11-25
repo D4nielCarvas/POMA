@@ -6,6 +6,8 @@ const { authLimiter, loginLimiter } = require('../middleware/rate-limit.middlewa
 const router = express.Router();
 
 router.post('/register', authLimiter, AuthController.register);
+router.get('/verify-email', AuthController.verifyEmail);
+router.post('/resend-verification', authLimiter, AuthController.resendVerification);
 router.post('/login', loginLimiter, AuthController.login);
 router.post('/logout', AuthController.logout);
 router.get('/me', authMiddleware, AuthController.me);

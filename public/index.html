@@ -884,6 +884,27 @@
                 <div id="share-users-list" style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
                     <!-- Renderizado dinamicamente via JS -->
                 </div>
+
+                <div class="form-section-title" style="margin-top: 1.5rem;">
+                    <span>Encaminhar Ficha do Projeto por E-mail</span>
+                </div>
+                <p style="font-size: 0.8125rem; color: var(--color-text-secondary); margin-bottom: 0.75rem;">
+                    Envia um e-mail formatado com a ficha técnica, prazos e cronograma para qualquer destinatário (consultor, cliente ou parceiro).
+                </p>
+                <form id="form-send-project-email" style="display: flex; flex-direction: column; gap: 0.625rem; margin-bottom: 0.5rem;">
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="email" id="email-send-recipient" class="form-input" placeholder="E-mail de destino..." required style="flex: 1;">
+                        <input type="text" id="email-send-name" class="form-input" placeholder="Nome (opcional)..." style="flex: 1;">
+                    </div>
+                    <input type="text" id="email-send-note" class="form-input" placeholder="Mensagem personalizada / observações (opcional)...">
+                    <button type="submit" class="btn btn-secondary" id="btn-submit-send-email" style="align-self: flex-start;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                        <span>Enviar Ficha por E-mail</span>
+                    </button>
+                </form>
             </div>
 
             <div class="modal-footer">

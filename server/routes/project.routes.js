@@ -19,5 +19,6 @@ router.patch('/:projectId/activities/:activityId', ProjectController.updateActiv
 router.get('/:id/shares', ProjectController.getShares);
 router.post('/:id/shares', ProjectController.share);
 router.delete('/:id/shares/:userId', ProjectController.removeShare);
+router.post('/:id/send-email', ProjectController.sendEmail);
 
 module.exports = router;

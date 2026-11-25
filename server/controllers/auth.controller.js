@@ -1,8 +1,10 @@
 const AuthService = require('../services/auth.service');
 const PasswordResetService = require('../services/password-reset.service');
+const VerificationService = require('../services/verification.service');
 
 const authService = new AuthService();
 const resetService = new PasswordResetService();
+const verificationService = new VerificationService();
 
 class AuthController {
     static _setAuthCookie(res, token) {
@@ -19,11 +21,58 @@ class AuthController {
         try {
             const { name, email, password } = req.body;
             const result = await authService.register({ name, email, password });
-            AuthController._setAuthCookie(res, result.token);
+
+            // Dispara e-mail de ativação/confirmação assincronamente
+            verificationService.sendVerification(result.user).catch(err => {
+                console.error('[AuthController Error] Falha no disparo de confirmação de conta:', err.message);
+            });
+
             return res.status(201).json({
                 success: true,
-                message: 'Usuário cadastrado com sucesso!',
-                data: result
+                message: 'Cadastro realizado com sucesso! Enviamos um link de confirmação para o seu e-mail.',
+                requireVerification: true,
+                data: {
+                    user: result.user
+                }
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    static async verifyEmail(req, res) {
+        try {
+            const { token } = req.query;
+            if (!token || typeof token !== 'string') {
+                return res.redirect('/?verification_error=' + encodeURIComponent('Token de verificação inválido ou ausente.'));
+            }
+
+            const user = await verificationService.verifyToken(token);
+            if (user) {
+                const jwtToken = authService.generateToken(user);
+                AuthController._setAuthCookie(res, jwtToken);
+            }
+
+            return res.redirect('/?verified=1');
+        } catch (error) {
+            return res.redirect('/?verification_error=' + encodeURIComponent(error.message));
+        }
+    }
+
+    static async resendVerification(req, res, next) {
+        try {
+            const { email } = req.body;
+            if (!email || typeof email !== 'string') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Por favor, informe um e-mail válido.'
+                });
+            }
+
+            await verificationService.resendVerification(email);
+            return res.status(200).json({
+                success: true,
+                message: 'Se este e-mail estiver cadastrado e pendente de ativação, um novo link de confirmação foi enviado.'
             });
         } catch (error) {
             next(error);

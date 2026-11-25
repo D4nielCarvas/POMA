@@ -10,10 +10,24 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(50) NOT NULL DEFAULT 'user',
+    email_verified INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Tokens de verificação/ativação de conta de e-mail (expiram em 24 horas)
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token VARCHAR(128) NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    used INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON email_verification_tokens(token);
 
 -- Tokens de recuperação de senha (expiram em 1 hora)
 CREATE TABLE IF NOT EXISTS password_reset_tokens (

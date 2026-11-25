@@ -98,6 +98,15 @@ async function initApp() {
         return;
     }
 
+    // Detecta retorno de verificação de e-mail na URL
+    if (urlParams.get('verified') === '1') {
+        Toast.show('✅ E-mail verificado com sucesso! Sua conta está ativada.', 'success');
+        window.history.replaceState({}, '', window.location.pathname);
+    } else if (urlParams.get('verification_error')) {
+        Toast.show('❌ Erro na confirmação: ' + decodeURIComponent(urlParams.get('verification_error')), 'error');
+        window.history.replaceState({}, '', window.location.pathname);
+    }
+
     checkAuthSession();
 
     // Redireciona para login automaticamente quando o token JWT expira
@@ -1975,6 +1984,38 @@ async function handleRemoveShare(projectId, userId) {
     }
 }
 
+async function handleSendProjectEmail(e) {
+    e.preventDefault();
+    if (!currentShareProjectId) return;
+
+    const emailInput = document.getElementById('email-send-recipient');
+    const nameInput = document.getElementById('email-send-name');
+    const noteInput = document.getElementById('email-send-note');
+    const btnSubmit = document.getElementById('btn-submit-send-email');
+
+    const recipientEmail = emailInput ? emailInput.value.trim() : '';
+    const recipientName = nameInput ? nameInput.value.trim() : '';
+    const note = noteInput ? noteInput.value.trim() : '';
+
+    if (!recipientEmail) return;
+
+    const originalText = btnSubmit.innerHTML;
+    try {
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = '<span>Enviando...</span>';
+
+        const res = await api.sendProjectEmail(currentShareProjectId, recipientEmail, recipientName, note);
+        Toast.show(res.message || 'Ficha do projeto enviada com sucesso!', 'success');
+        emailInput.value = '';
+        if (noteInput) noteInput.value = '';
+    } catch (error) {
+        Toast.show(error.message, 'error');
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = originalText;
+    }
+}
+
 // ==========================================================================
 // EXPORTAÇÃO DO PROJETO EM PDF
 // ==========================================================================
@@ -2276,7 +2317,14 @@ function bindGlobalEvents() {
 
         try {
             if (isRegister) {
-                await api.register(name, email, password);
+                const res = await api.register(name, email, password);
+                if (res.requireVerification) {
+                    Toast.show('✅ Cadastro realizado! Enviamos um link de confirmação para o seu e-mail.', 'success');
+                    tabLogin.click();
+                    document.getElementById('auth-email').value = email;
+                    document.getElementById('auth-password').value = '';
+                    return;
+                }
                 Toast.show('Conta criada com sucesso! Bem-vindo.', 'success');
             } else {
                 await api.login(email, password);
@@ -2664,6 +2712,9 @@ function bindGlobalEvents() {
 
     const formAddShare = document.getElementById('form-add-share');
     if (formAddShare) formAddShare.addEventListener('submit', handleAddShare);
+
+    const formSendProjectEmail = document.getElementById('form-send-project-email');
+    if (formSendProjectEmail) formSendProjectEmail.addEventListener('submit', handleSendProjectEmail);
 
     // 15. Modal de Criação Rápida no Calendário
     const btnCloseQuickAdd = document.getElementById('btn-close-quick-add-modal');

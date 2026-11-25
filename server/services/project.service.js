@@ -5,6 +5,7 @@ const LocationRepository = require('../models/location.repository');
 const ProjectShareRepository = require('../models/project-share.repository');
 const UserRepository = require('../models/user.repository');
 const AlertService = require('./alert.service');
+const { sendProjectSummaryEmail } = require('./email.service');
 const { getDatabaseHelper } = require('../config/database');
 const { isSupabaseConfigured } = require('../config/supabase');
 
@@ -420,6 +421,25 @@ class ProjectService {
         }
 
         await Promise.resolve(this.shareRepo.addShare(projectId, targetUser.id));
+
+        // Notifica o usuário por e-mail com a ficha técnica do projeto de forma assíncrona
+        (async () => {
+            try {
+                const owner = await Promise.resolve(this.userRepo.findById(userId));
+                const activities = await Promise.resolve(this.activityRepo.findByProjectId(projectId));
+                const projectFull = { ...project, activities };
+                await sendProjectSummaryEmail(
+                    targetUser.email,
+                    targetUser.name,
+                    owner?.name || 'Gestor do Projeto',
+                    projectFull,
+                    'Você recebeu acesso de visualização a este projeto na plataforma Poma.'
+                );
+            } catch (mailErr) {
+                console.error('[ProjectService Error] Falha ao notificar compartilhamento por e-mail:', mailErr.message);
+            }
+        })();
+
         return {
             success: true,
             message: `Projeto compartilhado com sucesso com ${targetUser.name} (${targetUser.email}).`,
@@ -428,6 +448,37 @@ class ProjectService {
                 name: targetUser.name,
                 email: targetUser.email
             }
+        };
+    }
+
+    /**
+     * Encaminha o resumo executivo e cronograma do projeto para qualquer e-mail informado
+     */
+    async sendProjectByEmail(projectId, userId, recipientEmail, recipientName = '', note = '') {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!recipientEmail || !emailRegex.test(recipientEmail.trim().toLowerCase())) {
+            throw new Error('Por favor, informe um endereço de e-mail de destino válido.');
+        }
+
+        const project = await this.getProjectById(projectId, userId);
+        if (!project) {
+            throw new Error('Projeto não encontrado ou acesso não autorizado.');
+        }
+
+        const sender = await Promise.resolve(this.userRepo.findById(userId));
+        const senderName = sender?.name || 'Membro da Equipe';
+
+        await sendProjectSummaryEmail(
+            recipientEmail.trim().toLowerCase(),
+            recipientName ? recipientName.trim() : null,
+            senderName,
+            project,
+            note ? note.trim() : ''
+        );
+
+        return {
+            success: true,
+            message: `Ficha técnica do projeto encaminhada com sucesso para ${recipientEmail}.`
         };
     }
 

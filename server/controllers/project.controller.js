@@ -175,6 +175,21 @@ class ProjectController {
             next(error);
         }
     }
+
+    static async sendEmail(req, res, next) {
+        try {
+            const userId = req.user.id;
+            const projectId = parsePositiveInteger(req.params.id, 'id');
+            const { recipientEmail, recipientName, note } = req.body;
+            const result = await projectService.sendProjectByEmail(projectId, userId, recipientEmail, recipientName, note);
+            return res.status(200).json({
+                success: true,
+                message: result.message
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = ProjectController;

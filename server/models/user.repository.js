@@ -11,19 +11,24 @@ class UserRepository {
             : supabase;
     }
 
-    async create({ name, email, passwordHash, role = 'user' }) {
+    async create({ name, email, passwordHash, role = 'user', emailVerified = 0 }) {
         let createdUser = null;
 
         // 1. Se o Supabase estiver disponível, grava na nuvem
         if (this.supabase) {
+            const insertPayload = {
+                name,
+                email,
+                password_hash: passwordHash,
+                role
+            };
+            if (emailVerified !== undefined) {
+                insertPayload.email_verified = Boolean(emailVerified);
+            }
+
             const { data, error } = await this.supabase
                 .from('users')
-                .insert({
-                    name,
-                    email,
-                    password_hash: passwordHash,
-                    role
-                })
+                .insert(insertPayload)
                 .select('id, name, email, role, created_at')
                 .single();
 
@@ -40,13 +45,14 @@ class UserRepository {
         if (createdUser) {
             try {
                 this.db.prepare(`
-                    INSERT INTO users (name, email, password_hash, role)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO users (name, email, password_hash, role, email_verified)
+                    VALUES (?, ?, ?, ?, ?)
                     ON CONFLICT(email) DO UPDATE SET
                         name = excluded.name,
                         password_hash = excluded.password_hash,
-                        role = excluded.role
-                `).run(name, email, passwordHash, role);
+                        role = excluded.role,
+                        email_verified = excluded.email_verified
+                `).run(name, email, passwordHash, role, emailVerified ? 1 : 0);
             } catch (cacheErr) {
                 console.warn('[Cache Sync Warning] Falha ao sincronizar usuário criado no SQLite local:', cacheErr.message);
             }
@@ -55,21 +61,23 @@ class UserRepository {
                 id: createdUser.id,
                 name: createdUser.name,
                 email: createdUser.email,
-                role: createdUser.role
+                role: createdUser.role,
+                email_verified: emailVerified ? 1 : 0
             };
         }
 
         // Fallback SQLite nativo se Supabase não estiver configurado
         const fallbackStmt = this.db.prepare(`
-            INSERT INTO users (name, email, password_hash, role)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO users (name, email, password_hash, role, email_verified)
+            VALUES (?, ?, ?, ?, ?)
         `);
-        const result = fallbackStmt.run(name, email, passwordHash, role);
+        const result = fallbackStmt.run(name, email, passwordHash, role, emailVerified ? 1 : 0);
         return {
             id: Number(result.lastInsertRowid),
             name,
             email,
-            role
+            role,
+            email_verified: emailVerified ? 1 : 0
         };
     }
 
@@ -78,7 +86,7 @@ class UserRepository {
         if (this.supabase) {
             const { data, error } = await this.supabase
                 .from('users')
-                .select('id, name, email, password_hash, role, created_at')
+                .select('id, name, email, password_hash, role, email_verified, created_at')
                 .eq('email', email)
                 .maybeSingle();
 
@@ -86,13 +94,14 @@ class UserRepository {
                 // Sincroniza cache local no SQLite (UPSERT por email, sem forçar ID)
                 try {
                     this.db.prepare(`
-                        INSERT INTO users (name, email, password_hash, role)
-                        VALUES (?, ?, ?, ?)
+                        INSERT INTO users (name, email, password_hash, role, email_verified)
+                        VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT(email) DO UPDATE SET
                             name = excluded.name,
                             password_hash = excluded.password_hash,
-                            role = excluded.role
-                    `).run(data.name, data.email, data.password_hash, data.role);
+                            role = excluded.role,
+                            email_verified = excluded.email_verified
+                    `).run(data.name, data.email, data.password_hash, data.role, data.email_verified ? 1 : 0);
                 } catch (cacheErr) {
                     console.warn('[Cache Sync Warning] Falha ao sincronizar usuário no SQLite local:', cacheErr.message);
                 }
@@ -102,7 +111,7 @@ class UserRepository {
 
         // 2. Fallback no SQLite local
         const stmt = this.db.prepare(`
-            SELECT id, name, email, password_hash, role, created_at
+            SELECT id, name, email, password_hash, role, email_verified, created_at
             FROM users
             WHERE email = ?
         `);
@@ -114,7 +123,7 @@ class UserRepository {
         if (this.supabase) {
             const { data, error } = await this.supabase
                 .from('users')
-                .select('id, name, email, role, created_at')
+                .select('id, name, email, role, email_verified, created_at')
                 .eq('id', id)
                 .maybeSingle();
 
@@ -124,7 +133,7 @@ class UserRepository {
         }
 
         const stmt = this.db.prepare(`
-            SELECT id, name, email, role, created_at
+            SELECT id, name, email, role, email_verified, created_at
             FROM users
             WHERE id = ?
         `);
